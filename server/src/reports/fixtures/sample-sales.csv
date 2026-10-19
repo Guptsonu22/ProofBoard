@@ -1,0 +1,13 @@
+order_date,region,product,units,revenue,customer_id
+2026-01-01,North,Widget,2,20,001
+2026-01-02,South,Gadget,1,15,002
+2026-01-03,North,Widget,3,30,003
+2026-01-04,South,Widget,1,10,004
+2026-01-05,North,Gadget,2,40,005
+2026-01-06,West,Widget,1,-5,006
+2026-01-07,South,Gadget,2,30,007
+2026-01-08,North,Gadget,2,bad,008
+2026-01-09,North,Widget,1,5,009
+2026-01-10,South,Widget,1,10,010
+2026-01-11,West,Widget,1,20,011
+2026-01-12,North,Gadget,1,25,012

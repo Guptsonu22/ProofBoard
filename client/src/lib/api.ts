@@ -5,6 +5,14 @@ export type ApiErrorBody = {
 export type PublicUser = { id: string; email: string; createdAt: string };
 export type ColumnProfile = { id: string; originalName: string; displayName: string; type: 'number' | 'date' | 'category' | 'text'; rationale: string; missingCount: number; invalidCount: number; samples: string[] };
 export type Dataset = { id: string; name: string; originalFileName: string | null; createdAt: string; sourceRecordCount: number; parsedRowCount: number; rejectedRowCount: number; columns: ColumnProfile[] };
+export type ReportBlock =
+  | { id: string; type: 'metric'; title: string; columnId: string; operation: 'sum'|'average'|'count'|'min'|'max'; groupByColumnId?: string }
+  | { id: string; type: 'chart'; title: string; chartType: 'bar'|'line'; dimensionColumnId: string; measureColumnId: string; operation: 'sum'|'average'|'count'|'min'|'max' }
+  | { id: string; type: 'table'; title: string; orderByColumnId: string; direction: 'asc'|'desc'; limit: number }
+  | { id: string; type: 'note'; title: string; text: string };
+export type ReportDefinition = { version: 1; filters: { dateRange?: { columnId: string; from?: string; to?: string }; categories: Array<{ columnId: string; values: string[] }> }; blocks: ReportBlock[] };
+export type Report = { id: string; name: string; datasetId: string; definition: ReportDefinition | null; createdAt: string; updatedAt: string };
+export type EvaluatedBlock = { id:string; type:string; title:string; result:any; explanation:string; operation:unknown; selectedColumns:unknown[]; filters:unknown; queryPlan:unknown; sourceRowsConsidered:number; rowsIncluded:number; rowsExcluded:number; exclusionReasons:Record<string,number>; nullAndInvalidPolicy:string };
 export type PreviewRow = { ordinal: number; sourceRow: number; sourceLine: number; values: unknown; warnings: unknown; rejected: boolean; rejectionReason: string | null };
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
@@ -18,6 +26,11 @@ export async function getDatasets(): Promise<Dataset[]> {
   const result = await jsonRequest<{ datasets: Dataset[] }>('/api/datasets');
   return result.datasets;
 }
+export async function getReports(): Promise<Array<Report & { dataset: { name: string } }>> { return (await jsonRequest<{reports:Array<Report & {dataset:{name:string}}>}>('/api/reports')).reports; }
+export async function createReport(datasetId:string,name:string):Promise<Report>{return (await jsonRequest<{report:Report}>('/api/reports',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({datasetId,name})})).report;}
+export async function getReport(id:string):Promise<Report>{return (await jsonRequest<{report:Report}>(`/api/reports/${encodeURIComponent(id)}`)).report;}
+export async function updateReport(id:string, update:{name?:string;definition?:ReportDefinition}):Promise<Report>{return (await jsonRequest<{report:Report}>(`/api/reports/${encodeURIComponent(id)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(update)})).report;}
+export async function evaluateReport(id:string,definition:ReportDefinition):Promise<{datasetId:string;summary:string;blocks:EvaluatedBlock[]}>{return (await jsonRequest<{evaluation:{datasetId:string;summary:string;blocks:EvaluatedBlock[]}}>(`/api/reports/${encodeURIComponent(id)}/evaluate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({definition})})).evaluation;}
 export async function getDataset(id: string): Promise<Dataset> {
   const result = await jsonRequest<{ dataset: Dataset }>(`/api/datasets/${encodeURIComponent(id)}`);
   return result.dataset;

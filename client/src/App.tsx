@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { Activity, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDashboard, LogOut, Plus, Settings2, Sparkles } from 'lucide-react';
 import { authenticate, getCurrentUser, getHealth, logout, type PublicUser } from './lib/api';
 import { DatasetDetailPage, DatasetsPage } from './datasets/DatasetPages';
+import { ReportEditorPage, ReportsPage } from './reports/ReportPages';
 
 function App() {
   const location = useLocation();
@@ -77,6 +78,8 @@ function App() {
             <Route path="/" element={<Dashboard email={user.email} />} />
             <Route path="/datasets" element={<DatasetsPage />} />
             <Route path="/datasets/:datasetId" element={<DatasetDetailPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/reports/:reportId" element={<ReportEditorPage />} />
             <Route path="*" element={<ComingSoon />} />
           </Routes>
         </div>
