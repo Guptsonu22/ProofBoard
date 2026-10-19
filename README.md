@@ -57,6 +57,10 @@ Create a report from a private dataset at **Reports**. Metric, chart, table, and
 
 Blank cells and invalid typed numbers or dates are excluded from the affected block and never coerced to zero. `count` counts valid, nonblank values in the selected column. Sum, average, minimum, and maximum require a number column. Repeated records count independently; negative numbers participate normally. Grouped metrics require a category column. Charts require a category or date dimension and numeric measure; date points are chronological and category points follow first source occurrence. Tables rank valid sort values and retain original source-row numbers; equal sort values keep source order. Only the selected top N rows are displayed.
 
+## Read-only sharing
+
+An owner can create a share snapshot with a 1, 7, or 30 day expiry, or no expiry. The snapshot freezes the saved report definition, evaluated block results, and calculation provenance. Public links contain a 256-bit random token; SQLite stores only its SHA-256 hash. Public reads recheck revocation and expiry each time, are rate limited, and return `Cache-Control: no-store` with a `no-referrer` policy. Public snapshots omit owner, report, and dataset IDs and do not provide private report or dataset endpoints. Tokens are returned only once at creation; the link manager can list status and revoke links, but cannot recover a lost token.
+
 ## Environment variables
 
 Copy `.env.example` to `server/.env` for local use. `PORT`, `CLIENT_ORIGIN`, `DATABASE_URL`, `SESSION_SECRET`, and `CSV_MAX_UPLOAD_BYTES` are parsed and validated at server startup. The upload limit defaults to 5 MB; CSVs are also limited to 50,000 source records and 100 columns. Browser writes must include the configured same origin; the server also rejects cross-site Fetch Metadata. Passwords are bcrypt hashed, login and registration are rate limited, and session IDs are stored in SQLite. The browser does not store authentication tokens in localStorage. Do not commit `.env` or use local database files in production.
@@ -72,12 +76,14 @@ client/                 React, TypeScript, Vite, Tailwind, Router, Recharts
   src/lib/               API client
   src/datasets/          Dataset upload, list, profile, and preview UI
   src/reports/           Report list, block editor, server preview, and proof UI
+  src/shares/            Share dialog and public snapshot viewer
   src/                   Application shell and styles
 server/                  Express, TypeScript, Prisma, SQLite
   prisma/                Database schema and migrations
   src/auth/               Session store, auth, CSRF and auth routes
   src/datasets/           CSV parser, inference, upload, and private preview APIs
   src/reports/            Versioned report definitions and independent evaluator
+  src/shares/             Hashed tokens, immutable snapshots, expiry and revocation checks
   src/resources/          Owner-scoped dataset and report metadata routes
   src/config/             Validated environment configuration
   src/lib/                Errors and request validation

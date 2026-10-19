@@ -69,7 +69,7 @@ function makePublicSnapshot(title: string, sharedAt: Date, expiresAt: Date | nul
       result,
       explanation: calculated.explanation,
       operation,
-      selectedColumns: calculated.selectedColumns.map((column) => ({ name: column.originalName, type: column.type })),
+      selectedColumns: calculated.selectedColumns.map((column) => ({ name: displayColumn(columns, column.id), type: column.type })),
       filters: safeFilters,
       queryPlan: { engine: calculated.queryPlan.engine, algorithm: calculated.queryPlan.algorithm, parameters: { operation, filters: safeFilters } },
       sourceRowsConsidered: calculated.sourceRowsConsidered,

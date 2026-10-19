@@ -15,12 +15,13 @@ describe('immutable secure report sharing',()=>{
  beforeEach(clearTestDatabase);afterAll(async()=>{await prisma.$disconnect();});
 
  it('shares a frozen, sanitized snapshot and rejects public access after immediate revocation',async()=>{
-  const owner=await signed('share-owner@example.com');const viewer=await signed('share-viewer@example.com');const outsider=await signed('share-outsider@example.com');
+  const owner=await signed('share-owner@example.com');const outsider=await signed('share-outsider@example.com');
   const upload=await owner.agent.post('/api/datasets').set('Origin',origin).attach('file',Buffer.from(csv),{filename:'sample-sales.csv',contentType:'text/csv'});
   expect(upload.status).toBe(201);const dataset=upload.body.dataset;
   const create=await owner.agent.post('/api/reports').set('Origin',origin).send({datasetId:dataset.id,name:'Quarterly sales'});expect(create.status).toBe(201);const report=create.body.report;
   const revenue=dataset.columns.find((column:{originalName:string})=>column.originalName==='revenue').id;
-  const definition={version:1,filters:{categories:[]},blocks:[{id:'revenue-total',type:'metric',title:'Revenue total',columnId:revenue,operation:'sum'}]};
+  const units=dataset.columns.find((column:{originalName:string})=>column.originalName==='units').id;
+  const definition={version:1,filters:{categories:[]},blocks:[{id:'revenue-total',type:'metric',title:'Revenue total',columnId:revenue,operation:'sum'},{id:'top-sales',type:'table',title:'Top sales',orderByColumnId:revenue,direction:'desc',limit:2}]};
   expect((await owner.agent.patch(`/api/reports/${report.id}`).set('Origin',origin).send({definition})).status).toBe(200);
 
   const otherDataset=await prisma.dataset.create({data:{userId:outsider.user.id,name:'Other private data'}});
@@ -37,16 +38,18 @@ describe('immutable secure report sharing',()=>{
   const publicAgent=request.agent(app);
   const response=await publicAgent.get(`/api/share/${share.token}`);
   expect(response.status).toBe(200);expect(response.headers['cache-control']).toContain('no-store');expect(response.headers['referrer-policy']).toBe('no-referrer');
-  expect(response.body.report.title).toBe('Quarterly sales');expect(response.body.report.blocks[0].result.value).toBe(200);expect(response.body.report.blocks[0].rowsIncluded).toBe(11);
+  expect(response.body.report.title).toBe('Quarterly sales');expect(response.body.report.blocks[0].result.value).toBe(200);expect(response.body.report.blocks[0].rowsIncluded).toBe(11);expect(response.body.report.blocks[1].result.rows).toHaveLength(2);
   const exposed=JSON.stringify(response.body);
   for(const privateIdentifier of [dataset.id,report.id,owner.user.id,owner.user.email])expect(exposed).not.toContain(privateIdentifier);
   expect(exposed).not.toContain(csv.toString());expect(exposed).not.toContain('tokenHash');expect(exposed).not.toContain('passwordHash');
   expect((await publicAgent.get(`/api/reports/${report.id}`)).status).toBe(401);
   expect((await publicAgent.get(`/api/datasets/${dataset.id}`)).status).toBe(401);
+  expect((await publicAgent.get(`/api/reports/${report.id}`).set('Authorization',`Bearer ${share.token}`)).status).toBe(401);
+  expect((await publicAgent.get(`/api/datasets/${dataset.id}`).set('Authorization',`Bearer ${share.token}`)).status).toBe(401);
   expect((await publicAgent.get(`/api/share/${share.token}/reports/${otherReport.id}`)).status).toBe(404);
   expect((await publicAgent.get(`/api/share/${'x'.repeat(43)}`)).status).toBe(404);
 
-  const updatedDefinition={version:1,filters:{categories:[]},blocks:[{id:'unit-total',type:'metric',title:'Units total',columnId:dataset.columns.find((column:{originalName:string})=>column.originalName==='units').id,operation:'sum'}]};
+  const updatedDefinition={version:1,filters:{categories:[]},blocks:[{id:'unit-total',type:'metric',title:'Units total',columnId:units,operation:'sum'}]};
   await owner.agent.patch(`/api/reports/${report.id}`).set('Origin',origin).send({name:'Edited private report',definition:updatedDefinition});
   const frozen=await publicAgent.get(`/api/share/${share.token}`);expect(frozen.body.report.title).toBe('Quarterly sales');expect(frozen.body.report.blocks[0].result.value).toBe(200);
 

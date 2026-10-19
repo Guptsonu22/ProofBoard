@@ -91,7 +91,7 @@ model ShareLink {
   reportId  String
   userId    String
   tokenHash String    @unique
-  snapshot  Json      @default("{}")
+  snapshot  Json?
   expiresAt DateTime?
   revokedAt DateTime?
   createdAt DateTime  @default(now())

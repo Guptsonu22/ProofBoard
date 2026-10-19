@@ -43,7 +43,7 @@ export async function evaluateReport(id:string,definition:ReportDefinition):Prom
 export async function createShare(id:string,expiresAt:string|null):Promise<{share:ShareStatus&{token:string;url:string}}>{return jsonRequest(`/api/reports/${encodeURIComponent(id)}/shares`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expiresAt})});}
 export async function getShares(id:string):Promise<ShareStatus[]>{return (await jsonRequest<{shares:ShareStatus[]}>(`/api/reports/${encodeURIComponent(id)}/shares`)).shares;}
 export async function revokeShare(reportId:string,shareId:string):Promise<ShareStatus>{return (await jsonRequest<{share:ShareStatus}>(`/api/reports/${encodeURIComponent(reportId)}/shares/${encodeURIComponent(shareId)}`,{method:'DELETE'})).share;}
-export async function getPublicSharedReport(token:string):Promise<PublicSharedReport>{return (await jsonRequest<{report:PublicSharedReport}>(`/api/share/${encodeURIComponent(token)}`)).report;}
+export async function getPublicSharedReport(token:string):Promise<PublicSharedReport>{return (await jsonRequest<{report:PublicSharedReport}>(`/api/share/${encodeURIComponent(token)}`,{credentials:'omit'})).report;}
 export async function getDataset(id: string): Promise<Dataset> {
   const result = await jsonRequest<{ dataset: Dataset }>(`/api/datasets/${encodeURIComponent(id)}`);
   return result.dataset;
