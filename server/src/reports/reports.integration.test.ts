@@ -23,7 +23,7 @@ describe('report ownership and evaluation API',()=>{
   const saved=await owner.agent.patch(`/api/reports/${report.id}`).set('Origin',origin).send({name:'January revenue',definition});expect(saved.status).toBe(200);
   const evaluated=await owner.agent.post(`/api/reports/${report.id}/evaluate`).set('Origin',origin).send({});
   expect(evaluated.status).toBe(200);expect(evaluated.body.evaluation.blocks[0].result.value).toBe(200);expect(evaluated.body.evaluation.blocks[0].rowsIncluded).toBe(11);
-  expect(evaluated.body.evaluation.blocks[0].queryPlan.statement).toMatch(/No SQL was executed/);
+  expect(evaluated.body.evaluation.blocks[0].queryPlan.algorithm).toMatch(/No SQL aggregation ran/);
   expect((await other.agent.get(`/api/reports/${report.id}`)).status).toBe(404);
   expect((await other.agent.get(`/api/datasets/${dataset.id}/categories/${dataset.columns.find((c:{originalName:string})=>c.originalName==='region').id}`)).status).toBe(404);
   expect((await other.agent.patch(`/api/reports/${report.id}`).set('Origin',origin).send({name:'stolen'})).status).toBe(404);

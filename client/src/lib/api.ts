@@ -12,7 +12,13 @@ export type ReportBlock =
   | { id: string; type: 'note'; title: string; text: string };
 export type ReportDefinition = { version: 1; filters: { dateRange?: { columnId: string; from?: string; to?: string }; categories: Array<{ columnId: string; values: string[] }> }; blocks: ReportBlock[] };
 export type Report = { id: string; name: string; datasetId: string; definition: ReportDefinition | null; createdAt: string; updatedAt: string };
-export type EvaluatedBlock = { id:string; type:string; title:string; result:any; explanation:string; operation:unknown; selectedColumns:unknown[]; filters:unknown; queryPlan:unknown; sourceRowsConsidered:number; rowsIncluded:number; rowsExcluded:number; exclusionReasons:Record<string,number>; nullAndInvalidPolicy:string };
+export type EvaluationProvenance = { explanation:string; operation:unknown; selectedColumns:Array<{id:string;originalName:string;type:ColumnProfile['type']}>; filters:ReportDefinition['filters']; queryPlan:{engine:'in-memory';algorithm:string;parameters:Record<string,unknown>}; sourceRowsConsidered:number; rowsIncluded:number; rowsExcluded:number; exclusionReasons:Record<string,number>; nullAndInvalidPolicy:string };
+export type EvaluatedBlock = EvaluationProvenance & (
+  | {id:string;type:'metric';title:string;result:{value:number|null;count:number}|Array<{group:string|undefined;value:number;count:number}>}
+  | {id:string;type:'chart';title:string;result:{series:Array<{label:string;value:number;count:number}>}}
+  | {id:string;type:'table';title:string;result:{rows:Array<{rank:number;sourceRow:number;values:unknown}>;totalRankableRows:number}}
+  | {id:string;type:'note';title:string;result:{text:string}}
+);
 export type PreviewRow = { ordinal: number; sourceRow: number; sourceLine: number; values: unknown; warnings: unknown; rejected: boolean; rejectionReason: string | null };
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {

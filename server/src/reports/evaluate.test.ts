@@ -16,7 +16,8 @@ describe('independent report evaluation engine',()=>{
   const output=evaluateReport(def(blocks),dataset).blocks;
   expect(output.map(b=>b.result.value)).toEqual([200,200/11,11,-5,40]);
   expect(output[0]?.rowsIncluded).toBe(11);expect(output[0]?.exclusionReasons).toEqual({'Invalid number value: revenue':1});
-  expect(output[0]?.queryPlan.statement).toContain('No SQL was executed');
+  expect(output[0]?.queryPlan.algorithm).toContain('No SQL aggregation ran');
+  expect(output[0]?.queryPlan.parameters).toMatchObject({ datasetId: 'sales' });
  });
  it('groups, filters, keeps negative values and excludes invalid dates and numeric values',()=>{
   const result=evaluateReport(def([{id:'g',type:'metric',title:'Revenue by region',columnId:col('revenue'),operation:'sum',groupByColumnId:col('region')}],{dateRange:{columnId:col('order_date'),from:'2026-01-02',to:'2026-01-06'},categories:[]}),dataset).blocks[0]!;
@@ -51,7 +52,23 @@ describe('independent report evaluation engine',()=>{
  it('uses the same returned result for output and proof, and treats duplicate rows as separate records',()=>{
   const duplicate={...dataset,rows:[...dataset.rows,...dataset.rows.slice(0,1)]};
   const result=evaluateReport(def([{id:'m',type:'metric',title:'Count',columnId:col('revenue'),operation:'count'}]),duplicate).blocks[0]!;
-  expect(result.result.value).toBe(result.rowsIncluded);expect(result.rowsIncluded).toBe(12);expect(result.queryPlan.operation).toEqual(result.operation);
+  expect(result.result.value).toBe(result.rowsIncluded);expect(result.rowsIncluded).toBe(12);expect(result.queryPlan.parameters.operation).toEqual(result.operation);
+ });
+ it('keeps displayed metric, chart and table outputs consistent with provenance row totals and reasons',()=>{
+  const output=evaluateReport(def([
+   {id:'metric',type:'metric',title:'Revenue',columnId:col('revenue'),operation:'sum'},
+   {id:'chart',type:'chart',title:'By region',chartType:'bar',dimensionColumnId:col('region'),measureColumnId:col('revenue'),operation:'sum'},
+   {id:'table',type:'table',title:'Top two',orderByColumnId:col('revenue'),direction:'desc',limit:2},
+  ]),dataset).blocks;
+  for(const block of output){
+   expect(block.sourceRowsConsidered).toBe(block.rowsIncluded+block.rowsExcluded);
+   expect(Object.values(block.exclusionReasons).reduce((sum,count)=>sum+count,0)).toBe(block.rowsExcluded);
+   expect(block.queryPlan.parameters.operation).toEqual(block.operation);
+  }
+  expect(output[0]?.type==='metric'&&output[0].result).toMatchObject({value:200,count:11});
+  expect(output[1]?.type==='chart'&&output[1].result.series.reduce((sum,point)=>sum+point.count,0)).toBe(output[1]?.rowsIncluded);
+  expect(output[2]?.type==='table'&&output[2].result.rows.length).toBe(output[2]?.rowsIncluded);
+  expect(output[2]?.exclusionReasons).toEqual({'Missing or invalid sort value: revenue':1,'Outside top N limit':9});
  });
  it('supports notes with no row calculations',()=>{expect(evaluateReport(emptyDefinition,dataset).blocks).toEqual([]);});
 });
