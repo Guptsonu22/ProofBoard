@@ -58,19 +58,20 @@ export function evaluateReport(input: unknown, dataset: EvaluationDataset) {
     if (!excluded) accepted.push(row);
   }
   const filterConfig = definition.filters;
-  const blocks = definition.blocks.map((item) => evaluateBlock(item, metadata, accepted, dataset, filterConfig, Object.entries(filterExclusions).reduce((a,[k,v]) => a+v,0), rejectedCount));
+  const blocks = definition.blocks.map((item) => evaluateBlock(item, metadata, accepted, dataset, filterConfig, filterExclusions, rejectedCount));
   const summary = `In-memory evaluation of ${dataset.rows.length} stored source records; ${rejectedCount} rejected during CSV ingestion and ${Object.values(filterExclusions).reduce((a,b)=>a+b,0)} excluded by report filters.`;
   return { datasetId: dataset.id, summary, blocks, reportFilterExclusions: filterExclusions, rejectedSourceRows: rejectedCount };
 }
 
-function evaluateBlock(block: ReportBlock, columns: ColumnProfile[], rows: EvaluationRow[], dataset: EvaluationDataset, filters: ReportDefinition['filters'], filterExcluded: number, rejectedCount: number) {
+function evaluateBlock(block: ReportBlock, columns: ColumnProfile[], rows: EvaluationRow[], dataset: EvaluationDataset, filters: ReportDefinition['filters'], filterReasons: ReasonCounts, rejectedCount: number) {
+  const filterExcluded = Object.values(filterReasons).reduce((total, count) => total + count, 0);
   const index = (item: ColumnProfile) => columns.findIndex((candidate) => candidate.id === item.id);
   const basePlan = { engine: 'in-memory' as const, statement: 'No SQL was executed. DatasetRow values were loaded with Prisma ownership-scoped queries, then evaluated in memory.', datasetId: dataset.id, source: 'DatasetRow', sourceOrder: 'ordinal ascending', filters, block: block.type };
-  if (block.type === 'note') return { id: block.id, type: block.type, title: block.title, result: { text: block.text }, explanation: 'Plain-text note; no rows were evaluated.', operation: { type: 'note', text: block.text }, selectedColumns: [], filters, queryPlan: basePlan, sourceRowsConsidered: dataset.rows.length, rowsIncluded: 0, rowsExcluded: dataset.rows.length, exclusionReasons: { 'Rejected during CSV ingestion': rejectedCount, 'Report filters': filterExcluded, 'Notes do not consume data rows': rows.length - filterExcluded }, nullAndInvalidPolicy: 'Not applicable.', };
+  if (block.type === 'note') return { id: block.id, type: block.type, title: block.title, result: { text: block.text }, explanation: 'Plain-text note; no rows were evaluated.', operation: { type: 'note', text: block.text }, selectedColumns: [], filters, queryPlan: basePlan, sourceRowsConsidered: dataset.rows.length, rowsIncluded: 0, rowsExcluded: dataset.rows.length, exclusionReasons: { ...filterReasons, ...(rejectedCount ? { 'Rejected during CSV ingestion': rejectedCount } : {}), 'Data blocks only': rows.length - filterExcluded }, nullAndInvalidPolicy: 'Not applicable.', };
   const plan: Record<string, unknown> = { ...basePlan };
   const reasons: ReasonCounts = {};
   const considered = rows.length;
-  const finish = (included: number, result: unknown, operation: unknown, selected: ColumnProfile[], explanation: string, excludedRows: number) => ({ id: block.id, type: block.type, title: block.title, result, explanation, operation, selectedColumns: selected.map(({id,originalName,type})=>({id,originalName,type})), filters, queryPlan: { ...plan, operation }, sourceRowsConsidered: dataset.rows.length, rowsIncluded: included, rowsExcluded: excludedRows + filterExcluded + rejectedCount, exclusionReasons: { ...reasons, ...(filterExcluded ? { 'Report filters': filterExcluded } : {}), ...(rejectedCount ? { 'Rejected during CSV ingestion': rejectedCount } : {}) }, nullAndInvalidPolicy: 'Blank values and invalid values for inferred number/date columns are excluded, never replaced with zero. Duplicate records remain separate rows; negative numbers are included normally.' });
+  const finish = (included: number, result: unknown, operation: unknown, selected: ColumnProfile[], explanation: string, excludedRows: number) => ({ id: block.id, type: block.type, title: block.title, result, explanation, operation, selectedColumns: selected.map(({id,originalName,type})=>({id,originalName,type})), filters, queryPlan: { ...plan, operation }, sourceRowsConsidered: dataset.rows.length, rowsIncluded: included, rowsExcluded: excludedRows + filterExcluded + rejectedCount, exclusionReasons: { ...reasons, ...filterReasons, ...(rejectedCount ? { 'Rejected during CSV ingestion': rejectedCount } : {}) }, nullAndInvalidPolicy: 'Blank values and invalid values for inferred number/date columns are excluded, never replaced with zero. Duplicate records remain separate rows; negative numbers are included normally.' });
   const addInvalid = (reason: string) => counted(reason, reasons);
 
   if (block.type === 'metric') {
