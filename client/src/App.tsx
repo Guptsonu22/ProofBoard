@@ -4,6 +4,7 @@ import { Activity, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDas
 import { authenticate, getCurrentUser, getHealth, logout, type PublicUser } from './lib/api';
 import { DatasetDetailPage, DatasetsPage } from './datasets/DatasetPages';
 import { ReportEditorPage, ReportsPage } from './reports/ReportPages';
+import { SharedReportPage } from './shares/SharedReportPage';
 
 function App() {
   const location = useLocation();
@@ -13,12 +14,13 @@ function App() {
   const [logoutBusy, setLogoutBusy] = useState(false);
 
   useEffect(() => {
+    if (location.pathname.startsWith('/share/')) return;
     let active = true;
     getCurrentUser()
       .then((currentUser) => { if (active) { setUser(currentUser); setAuthState('ready'); } })
       .catch(() => { if (active) { setAuthError('The account service is unavailable. Please try again.'); setAuthState('error'); } });
     return () => { active = false; };
-  }, []);
+  }, [location.pathname]);
 
   async function signOut() {
     setLogoutBusy(true);
@@ -33,6 +35,7 @@ function App() {
     }
   }
 
+  if (location.pathname.startsWith('/share/')) return <Routes><Route path="/share/:token" element={<SharedReportPage />} /><Route path="*" element={<CenteredState title="Shared report not found." />} /></Routes>;
   if (authState === 'loading') return <CenteredState title="Checking your session…" />;
   if (!user) return <AuthScreen initialError={authError} onAuthenticated={setUser} />;
 

@@ -72,7 +72,7 @@ describe('authentication and resource authorization', () => {
     const owner = await createUserFixture('owner@example.com');
     const otherUser = await createUserFixture('other@example.com');
     const dataset = await prisma.dataset.create({ data: { userId: owner.id, name: 'Private dataset', originalFileName: 'private.csv' } });
-    const report = await prisma.report.create({ data: { userId: owner.id, datasetId: dataset.id, name: 'Private report', definition: { groupBy: 'region' } } });
+    const report = await prisma.report.create({ data: { userId: owner.id, datasetId: dataset.id, name: 'Private report', definition: { version: 1, filters: { categories: [] }, blocks: [] } } });
     const ownerAgent = request.agent(app);
     const otherAgent = request.agent(app);
     await ownerAgent.post('/api/auth/login').set('Origin', origin).send({ email: owner.email, password: fixturePassword });
@@ -90,13 +90,13 @@ describe('authentication and resource authorization', () => {
     expect((await otherAgent.get(reportPath)).status).toBe(404);
     expect((await otherAgent.patch(reportPath).set('Origin', origin).send({ name: 'stolen' })).status).toBe(404);
     expect((await otherAgent.delete(reportPath).set('Origin', origin)).status).toBe(404);
-    expect((await otherAgent.post(`${reportPath}/share`).set('Origin', origin)).status).toBe(404);
+    expect((await otherAgent.post(`${reportPath}/shares`).set('Origin', origin).send({})).status).toBe(404);
 
     expect((await ownerAgent.get(datasetPath)).body.dataset.name).toBe('Private dataset');
     expect((await ownerAgent.get(reportPath)).body.report.name).toBe('Private report');
     expect(await prisma.shareLink.count()).toBe(0);
 
-    const ownerShare = await ownerAgent.post(`${reportPath}/share`).set('Origin', origin);
+    const ownerShare = await ownerAgent.post(`${reportPath}/shares`).set('Origin', origin).send({});
     expect(ownerShare.status).toBe(201);
     expect(ownerShare.body.share).toHaveProperty('token');
     expect(ownerShare.body.share).not.toHaveProperty('tokenHash');

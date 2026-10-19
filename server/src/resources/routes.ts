@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { createHash, randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import type { Response } from 'express';
 import { prisma } from '../db/client.js';
@@ -91,19 +90,3 @@ resourcesRouter.delete('/reports/:reportId', requireAuth, validateParams(reportP
   } catch (error) { next(error); }
 });
 
-resourcesRouter.post('/reports/:reportId/share', requireAuth, validateParams(reportParams), async (_request, response, next) => {
-  try {
-    const { reportId } = _request.params as z.infer<typeof reportParams>;
-    const userId = ownerId(response);
-    const report = await prisma.report.findFirst({ where: { id: reportId, userId }, select: { id: true } });
-    if (!report) throw missingResource();
-
-    const token = randomBytes(32).toString('base64url');
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const share = await prisma.shareLink.create({
-      data: { reportId, userId, tokenHash },
-      select: { id: true, expiresAt: true, createdAt: true },
-    });
-    response.status(201).json({ share: { ...share, token } });
-  } catch (error) { next(error); }
-});

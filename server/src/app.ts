@@ -13,6 +13,7 @@ import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { resourcesRouter } from './resources/routes.js';
 import { datasetsRouter } from './datasets/routes.js';
 import { reportsRouter } from './reports/routes.js';
+import { publicShareRouter, sharingRouter } from './shares/routes.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -36,6 +37,8 @@ app.get('/api/health', (_request, response) => {
 app.use('/api/auth', authRouter);
 app.use('/api/datasets', datasetsRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/reports', sharingRouter);
+app.use('/api/share', publicShareRouter);
 app.use('/api', resourcesRouter);
 
 if (env.NODE_ENV === 'production') {

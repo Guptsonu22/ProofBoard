@@ -19,6 +19,9 @@ export type EvaluatedBlock = EvaluationProvenance & (
   | {id:string;type:'table';title:string;result:{rows:Array<{rank:number;sourceRow:number;values:unknown}>;totalRankableRows:number}}
   | {id:string;type:'note';title:string;result:{text:string}}
 );
+export type PublicSharedBlock = {type:'metric'|'chart'|'table'|'note';title:string;result:any;explanation:string;operation:unknown;selectedColumns:Array<{name:string;type:ColumnProfile['type']}>;filters:unknown;queryPlan:{engine:'in-memory';algorithm:string;parameters:Record<string,unknown>};sourceRowsConsidered:number;rowsIncluded:number;rowsExcluded:number;exclusionReasons:Record<string,number>;nullAndInvalidPolicy:string};
+export type PublicSharedReport = {version:1;title:string;sharedAt:string;expiresAt:string|null;definition:unknown;blocks:PublicSharedBlock[]};
+export type ShareStatus = {id:string;expiresAt:string|null;revokedAt:string|null;createdAt:string;status:'active'|'expired'|'revoked'};
 export type PreviewRow = { ordinal: number; sourceRow: number; sourceLine: number; values: unknown; warnings: unknown; rejected: boolean; rejectionReason: string | null };
 
 async function jsonRequest<T>(url: string, init?: RequestInit): Promise<T> {
@@ -37,6 +40,10 @@ export async function createReport(datasetId:string,name:string):Promise<Report>
 export async function getReport(id:string):Promise<Report>{return (await jsonRequest<{report:Report}>(`/api/reports/${encodeURIComponent(id)}`)).report;}
 export async function updateReport(id:string, update:{name?:string;definition?:ReportDefinition}):Promise<Report>{return (await jsonRequest<{report:Report}>(`/api/reports/${encodeURIComponent(id)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(update)})).report;}
 export async function evaluateReport(id:string,definition:ReportDefinition):Promise<{datasetId:string;summary:string;blocks:EvaluatedBlock[]}>{return (await jsonRequest<{evaluation:{datasetId:string;summary:string;blocks:EvaluatedBlock[]}}>(`/api/reports/${encodeURIComponent(id)}/evaluate`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({definition})})).evaluation;}
+export async function createShare(id:string,expiresAt:string|null):Promise<{share:ShareStatus&{token:string;url:string}}>{return jsonRequest(`/api/reports/${encodeURIComponent(id)}/shares`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({expiresAt})});}
+export async function getShares(id:string):Promise<ShareStatus[]>{return (await jsonRequest<{shares:ShareStatus[]}>(`/api/reports/${encodeURIComponent(id)}/shares`)).shares;}
+export async function revokeShare(reportId:string,shareId:string):Promise<ShareStatus>{return (await jsonRequest<{share:ShareStatus}>(`/api/reports/${encodeURIComponent(reportId)}/shares/${encodeURIComponent(shareId)}`,{method:'DELETE'})).share;}
+export async function getPublicSharedReport(token:string):Promise<PublicSharedReport>{return (await jsonRequest<{report:PublicSharedReport}>(`/api/share/${encodeURIComponent(token)}`)).report;}
 export async function getDataset(id: string): Promise<Dataset> {
   const result = await jsonRequest<{ dataset: Dataset }>(`/api/datasets/${encodeURIComponent(id)}`);
   return result.dataset;
