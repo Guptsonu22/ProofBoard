@@ -29,7 +29,7 @@ const MAX_COLUMNS = 100;
 const MAX_ROWS = 50_000;
 const MAX_RECORD_CHARS = 256_000;
 const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
-const ID_HEADER = /(?:^|[ _-])(id|identifier|code|key|uuid|zip|postal)(?:$|[ _-])/i;
+const ID_HEADER = /(?:^|[ _-])(id|identifier|code|key|uuid|zip|postal|reference|ref)(?:$|[ _-])|(?:customer|account|invoice|record|order)[ _-]?number/i;
 const NUMBER_HEADER = /amount|total|count|price|quantity|revenue|sales|score|age|rate|percent|value|weight|height|cost|tax|balance/i;
 const DATE_HEADER = /date|time|created|updated|timestamp|signup/i;
 
@@ -51,7 +51,7 @@ export function parseCsv(buffer: Buffer): ParsedCsv {
   let parsed: ParsedRecord[];
   try {
     parsed = parse(source, {
-      bom: true, columns: false, skip_empty_lines: true, skip_records_with_error: true,
+      bom: true, columns: false, skip_empty_lines: false, skip_records_with_error: true,
       relax_column_count: true, raw: true, info: true, max_record_size: MAX_RECORD_CHARS,
       on_skip(error: CsvError | undefined, raw: string | undefined) {
         malformed.push({ raw: raw ?? '', reason: friendlyCsvError(error), line: typeof error?.lines === 'number' ? error.lines : 1 });
@@ -61,6 +61,7 @@ export function parseCsv(buffer: Buffer): ParsedCsv {
     throw new AppError(400, 'MALFORMED_CSV', `The CSV could not be parsed: ${friendlyCsvError(error as CsvError)}. Check the quotes and record length.`);
   }
   if (parsed.length < 2) throw new AppError(400, 'EMPTY_FILE', 'No CSV data rows were found. Add a header row and at least one data row.');
+  if (malformed.some((entry) => entry.line <= parsed[0]!.info.lines)) throw new AppError(400, 'MALFORMED_HEADER', 'The CSV header contains malformed quoting. Repair the first row and upload again.');
   const headers = parsed[0]!.record;
   if (!headers.length || headers.length > MAX_COLUMNS) throw new AppError(400, 'COLUMN_LIMIT', `CSV files must have between 1 and ${MAX_COLUMNS} columns.`);
   const dataRecords = parsed.slice(1);
@@ -90,7 +91,7 @@ export function parseCsv(buffer: Buffer): ParsedCsv {
     if (row.rejected) continue;
     columns.forEach((column, index) => {
       const value = row.values[index] ?? '';
-      if (value.trim() === '') return;
+      if (value.trim() === '') { row.warnings.push(`${column.displayName}: value is missing.`); return; }
       const invalid = column.type === 'number' ? !(NUMBER.test(value.trim()) && Number.isFinite(Number(value))) : column.type === 'date' ? !isIsoDate(value) : false;
       if (invalid) row.warnings.push(`${column.displayName}: “${value.slice(0, 80)}” is not a valid ${column.type}.`);
     });
@@ -131,8 +132,8 @@ function profileColumns(headers: string[], rows: IngestRow[]): ColumnProfile[] {
     const distinct = new Set(present);
     const numericCount = present.filter((value) => NUMBER.test(value.trim()) && Number.isFinite(Number(value))).length;
     const dateCount = present.filter(isIsoDate).length;
-    const idLike = ID_HEADER.test(originalName.trim()) || present.some((value) => /^0\d+$/.test(value.trim())) ||
-      (present.length >= 5 && distinct.size / present.length >= 0.8 && present.every((value) => /^\d{5,}$/.test(value.trim())));
+    const mostlyUniqueIntegers = present.length >= 5 && distinct.size / present.length >= 0.8 && present.every((value) => /^[+-]?\d+$/.test(value.trim()));
+    const idLike = ID_HEADER.test(originalName.trim()) || present.some((value) => /^0\d+$/.test(value.trim())) || (mostlyUniqueIntegers && !NUMBER_HEADER.test(originalName));
     let type: ColumnType;
     let rationale: string;
     if (present.length === 0) {
@@ -145,7 +146,7 @@ function profileColumns(headers: string[], rows: IngestRow[]): ColumnProfile[] {
       type = 'category'; rationale = `The column has low cardinality (${distinct.size} distinct values across ${present.length} non-empty samples).`;
     } else {
       type = idLike ? 'category' : 'text';
-      rationale = idLike ? 'Identifier-like names, leading zeroes, or mostly unique digit strings are kept categorical to avoid treating IDs as measures.' : 'Values do not meet the conservative number or ISO date thresholds, and cardinality is too high for a category.';
+      rationale = idLike ? 'Identifier-like names, leading zeroes, or mostly unique integer strings are kept categorical to avoid treating IDs as measures.' : 'Values do not meet the conservative number or ISO date thresholds, and cardinality is too high for a category.';
     }
     const invalidCount = type === 'number' ? present.length - numericCount : type === 'date' ? present.length - dateCount : 0;
     return {

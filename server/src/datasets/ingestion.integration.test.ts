@@ -35,7 +35,7 @@ describe('server CSV ingestion and data-quality profiling', () => {
     expect(result.columns[2]?.invalidCount).toBe(1);
     expect(result.columns[3]?.missingCount).toBe(1);
     expect(result.rows[1]?.warnings).toHaveLength(1);
-    expect(result.rows[2]?.warnings).toHaveLength(1);
+    expect(result.rows[2]?.warnings).toHaveLength(2);
   });
 
   it('renames duplicate and empty headers deterministically without losing source fields', () => {
@@ -43,6 +43,23 @@ describe('server CSV ingestion and data-quality profiling', () => {
     expect(result.columns.map((column) => column.id)).toEqual(['column_1', 'column_2', 'column_3', 'column_4']);
     expect(result.columns.map((column) => column.displayName)).toEqual(['name', 'name (2)', 'Column 3 (unnamed)', 'Column 4 (unnamed)']);
     expect(result.rows[0]?.values).toEqual(['Ada', 'Grace', 'third', 'value']);
+  });
+
+  it('counts blank cells as missing without rejecting the record and preserves an empty physical record', () => {
+    const result = parseCsv(Buffer.from('code,amount\n001,\n002,12\n\n003,15'));
+    expect(result.sourceRecordCount).toBe(4);
+    expect(result.parsedRowCount).toBe(3);
+    expect(result.rejectedRowCount).toBe(1);
+    expect(result.rows[0]?.rejected).toBe(false);
+    expect(result.columns[0]?.type).toBe('category');
+    expect(result.columns[1]?.missingCount).toBe(1);
+  });
+
+  it('keeps mostly unique integer identifiers categorical while measure columns remain numeric', () => {
+    const result = parseCsv(Buffer.from('transaction,amount\n10001,10\n10002,12\n10003,14\n10004,16\n10005,18'));
+    expect(result.columns[0]?.type).toBe('category');
+    expect(result.columns[0]?.rationale).toMatch(/unique integer/i);
+    expect(result.columns[1]?.type).toBe('number');
   });
 
   it('rejects empty, binary, invalid UTF-8, malformed EOF quoting, and oversized uploads with clear errors', async () => {
@@ -76,6 +93,7 @@ describe('server CSV ingestion and data-quality profiling', () => {
     const detail = await agent.get(`/api/datasets/${response.body.dataset.id}/warnings`);
     expect(detail.body.total).toBe(1);
     expect(detail.body.warnings[0].rejectionReason).toMatch(/Malformed CSV/);
+    expect(detail.body.warnings[0].sourceLine).toBe(3);
     const preview = await agent.get(`/api/datasets/${response.body.dataset.id}/preview`);
     expect(preview.body.rows).toHaveLength(3);
     expect(preview.body.rows[2].values).toEqual(['Grace', '12']);
@@ -100,7 +118,7 @@ describe('server CSV ingestion and data-quality profiling', () => {
     expect(preview.body.rows[0].values[4]).toBe('quoted, comma');
     expect(preview.body.rows[1].values[4]).toBe('line one\nline two');
     expect(preview.body.rows[0].values[0]).toBe('00123');
-    expect((await ownerAgent.get(`/api/datasets/${dataset.id}/warnings`)).body.total).toBe(2);
+    expect((await ownerAgent.get(`/api/datasets/${dataset.id}/warnings`)).body.total).toBe(3);
     expect((await otherAgent.get('/api/datasets')).body.datasets).toHaveLength(0);
     expect((await otherAgent.get(`/api/datasets/${dataset.id}`)).status).toBe(404);
     expect((await otherAgent.get(`/api/datasets/${dataset.id}/preview`)).status).toBe(404);
