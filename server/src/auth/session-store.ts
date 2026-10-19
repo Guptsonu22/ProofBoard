@@ -7,7 +7,7 @@ export class PrismaSessionStore extends session.Store {
     super();
   }
 
-  get(sid: string, callback: (error: unknown, session?: session.SessionData | null) => void): void {
+  override get(sid: string, callback: (error: unknown, session?: session.SessionData | null) => void): void {
     void this.prisma.authSession.findUnique({ where: { sid } })
       .then(async (record) => {
         if (!record) return callback(null, null);
@@ -20,7 +20,7 @@ export class PrismaSessionStore extends session.Store {
       .catch((error: unknown) => callback(error));
   }
 
-  set(sid: string, value: session.SessionData, callback?: (error?: unknown) => void): void {
+  override set(sid: string, value: session.SessionData, callback?: (error?: unknown) => void): void {
     const expiresAt = value.cookie.expires ? new Date(value.cookie.expires) : new Date(Date.now() + SESSION_LIFETIME_MS);
     const userId = value.userId ?? null;
     const data = JSON.stringify(value);
@@ -31,13 +31,13 @@ export class PrismaSessionStore extends session.Store {
     }).then(() => callback?.()).catch((error: unknown) => callback?.(error));
   }
 
-  destroy(sid: string, callback?: (error?: unknown) => void): void {
+  override destroy(sid: string, callback?: (error?: unknown) => void): void {
     void this.prisma.authSession.deleteMany({ where: { sid } })
       .then(() => callback?.())
       .catch((error: unknown) => callback?.(error));
   }
 
-  touch(sid: string, value: session.SessionData, callback?: (error?: unknown) => void): void {
+  override touch(sid: string, value: session.SessionData, callback?: (error?: unknown) => void): void {
     const expiresAt = value.cookie.expires ? new Date(value.cookie.expires) : new Date(Date.now() + SESSION_LIFETIME_MS);
     void this.prisma.authSession.updateMany({ where: { sid }, data: { expiresAt } })
       .then(() => callback?.())

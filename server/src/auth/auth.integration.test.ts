@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import request from 'supertest';
 import { app } from '../app.js';
 import { env } from '../config/env.js';
@@ -94,6 +95,13 @@ describe('authentication and resource authorization', () => {
     expect((await ownerAgent.get(datasetPath)).body.dataset.name).toBe('Private dataset');
     expect((await ownerAgent.get(reportPath)).body.report.name).toBe('Private report');
     expect(await prisma.shareLink.count()).toBe(0);
+
+    const ownerShare = await ownerAgent.post(`${reportPath}/share`).set('Origin', origin);
+    expect(ownerShare.status).toBe(201);
+    expect(ownerShare.body.share).toHaveProperty('token');
+    expect(ownerShare.body.share).not.toHaveProperty('tokenHash');
+    const storedLink = await prisma.shareLink.findUnique({ where: { id: ownerShare.body.share.id } });
+    expect(storedLink?.tokenHash).toBe(createHash('sha256').update(ownerShare.body.share.token as string).digest('hex'));
   });
 
   it('rejects state-changing requests that do not have the configured origin', async () => {
