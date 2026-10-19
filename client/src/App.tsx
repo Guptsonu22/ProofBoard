@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes } from 'react-router-dom';
-import { Activity, ArrowUpRight, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDashboard, LogOut, Plus, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { Activity, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDashboard, LogOut, Plus, Settings2, Sparkles } from 'lucide-react';
 import { authenticate, getCurrentUser, getHealth, logout, type PublicUser } from './lib/api';
+import { DatasetDetailPage, DatasetsPage } from './datasets/DatasetPages';
 
 function App() {
+  const location = useLocation();
   const [user, setUser] = useState<PublicUser | null>(null);
   const [authState, setAuthState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [authError, setAuthError] = useState('');
@@ -67,12 +69,14 @@ function App() {
 
       <main className="min-w-0 flex-1 md:ml-[248px]">
         <header className="sticky top-0 z-10 flex h-[68px] items-center justify-between border-b border-slate-200/70 bg-white/90 px-5 backdrop-blur md:px-9">
-          <div className="flex items-center gap-2 text-sm"><span className="text-slate-400">Workspace</span><span className="text-slate-300">/</span><span className="font-medium">Overview</span></div>
-          <div className="flex items-center gap-3"><HealthStatus /><button className="button-primary hidden sm:inline-flex" disabled title="Dataset upload will be available in a later phase"><Plus size={16} /> New report</button><div className="avatar md:hidden">PB</div></div>
+          <div className="flex items-center gap-2 text-sm"><span className="text-slate-400">Workspace</span><span className="text-slate-300">/</span><span className="font-medium">{location.pathname.startsWith('/datasets') ? 'Datasets' : location.pathname.startsWith('/reports') ? 'Reports' : 'Overview'}</span></div>
+          <div className="flex items-center gap-3"><HealthStatus /><Link to="/datasets" className="button-primary hidden sm:inline-flex"><Plus size={16} /> Add dataset</Link><div className="avatar md:hidden">PB</div></div>
         </header>
         <div className="mx-auto max-w-[1180px] px-5 py-8 md:px-9 md:py-10">
           <Routes>
             <Route path="/" element={<Dashboard email={user.email} />} />
+            <Route path="/datasets" element={<DatasetsPage />} />
+            <Route path="/datasets/:datasetId" element={<DatasetDetailPage />} />
             <Route path="*" element={<ComingSoon />} />
           </Routes>
         </div>
@@ -146,34 +150,21 @@ function Dashboard({ email }: { email: string }) {
   return <>
     <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
       <div><div className="mb-2 flex items-center gap-2 text-xs font-medium text-indigo-600"><Activity size={14} /> YOUR DATA, MADE CLEAR</div><h1 className="text-3xl font-bold tracking-tight md:text-[34px]">Good to see you, {email.split('@')[0]}.</h1><p className="mt-2 text-sm text-slate-500">A clear view of your reporting workspace.</p></div>
-      <button className="button-primary w-fit" disabled title="Dataset upload will be available in a later phase"><Plus size={16} /> Create a report</button>
+      <Link className="button-primary w-fit" to="/datasets"><Plus size={16} /> Add a dataset</Link>
     </div>
-    <section className="grid gap-4 sm:grid-cols-3" aria-label="Workspace summary">
-      <SummaryCard icon={<FileSpreadsheet size={17} />} title="Reports" value="—" note="No reports yet" tint="violet" />
-      <SummaryCard icon={<FolderOpen size={17} />} title="Datasets" value="—" note="No datasets yet" tint="blue" />
-      <SummaryCard icon={<ShieldCheck size={17} />} title="Shared with you" value="—" note="Sharing is not set up" tint="green" />
+    <section className="mt-2 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
+      <div className="border-b border-slate-100 px-6 py-5"><h2 className="font-semibold">Start with a dataset</h2><p className="mt-1 text-xs text-slate-500">Upload a CSV to see its profile and data quality.</p></div>
+      <div className="flex min-h-[230px] flex-col items-center justify-center px-6 py-10 text-center">
+        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><FileSpreadsheet size={24} /></div>
+        <h3 className="text-sm font-semibold">Your first dataset starts here</h3>
+        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Explore column types, missing values, and row level warnings before creating reports.</p>
+        <Link className="button-secondary mt-5" to="/datasets"><Plus size={15} /> Add a dataset</Link>
+      </div>
     </section>
-    <section className="mt-7 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
-      <div className="flex items-center justify-between border-b border-slate-100 px-6 py-5"><div><h2 className="font-semibold">Recent reports</h2><p className="mt-1 text-xs text-slate-500">Your latest report activity will appear here.</p></div><button className="button-quiet" disabled>View all <ArrowUpRight size={14} /></button></div>
-      <EmptyState />
-    </section>
-    <p className="mt-5 text-center text-xs text-slate-400">Your data stays yours. Nothing appears here until you add it.</p>
+    <p className="mt-5 text-center text-xs text-slate-400">Your dataset list is private to your account.</p>
   </>;
 }
 
-function SummaryCard({ icon, title, value, note, tint }: { icon: React.ReactNode; title: string; value: string; note: string; tint: string }) {
-  return <article className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)]"><div className="flex items-center justify-between"><span className="text-sm font-medium text-slate-500">{title}</span><span className={`icon-tint tint-${tint}`}>{icon}</span></div><div className="mt-4 flex items-end justify-between"><span className="text-3xl font-bold tracking-tight text-slate-300">{value}</span><span className="text-xs text-slate-400">{note}</span></div></article>;
-}
-
-function EmptyState() {
-  return <div className="flex min-h-[270px] flex-col items-center justify-center px-6 py-12 text-center">
-    <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><FileSpreadsheet size={24} /></div>
-    <h3 className="text-sm font-semibold">Your first report starts with a dataset</h3>
-    <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Upload a CSV to explore its columns, then build a report with calculations you can trace back to your data.</p>
-    <button className="button-secondary mt-5" disabled title="CSV upload will be available in a later phase"><Plus size={15} /> Add a dataset</button>
-    <span className="mt-3 text-[11px] text-slate-400">CSV upload is coming in the next build phase</span>
-  </div>;
-}
 
 function ComingSoon() {
   return <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><FolderOpen size={21} /></div><h1 className="text-xl font-semibold">This workspace section is being prepared</h1><p className="mt-2 text-sm text-slate-500">The dashboard is ready. More workspace features will arrive in a later phase.</p></div>;

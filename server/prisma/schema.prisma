@@ -36,13 +36,37 @@ model Dataset {
   userId           String
   name             String
   originalFileName String?
+  sourceRecordCount Int     @default(0)
+  parsedRowCount    Int     @default(0)
+  rejectedRowCount  Int     @default(0)
+  columns           Json     @default("[]")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rows             DatasetRow[]
   reports          Report[]
 
   @@unique([id, userId])
   @@index([userId, createdAt])
+}
+
+model DatasetRow {
+  id             String   @id @default(cuid())
+  datasetId      String
+  userId         String
+  ordinal        Int
+  sourceRow      Int
+  sourceLine     Int
+  values         Json
+  warnings       Json
+  rejected       Boolean  @default(false)
+  hasWarnings    Boolean  @default(false)
+  rejectionReason String?
+  dataset        Dataset  @relation(fields: [datasetId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@unique([datasetId, ordinal])
+  @@index([datasetId, userId, ordinal])
+  @@index([datasetId, userId, rejected])
 }
 
 model Report {

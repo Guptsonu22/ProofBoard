@@ -13,6 +13,15 @@ export const notFoundHandler: RequestHandler = (_request, response) => {
 };
 
 export const errorHandler: ErrorRequestHandler = (error: unknown, _request, response, _next) => {
+  if (typeof error === 'object' && error !== null && 'name' in error && error.name === 'MulterError' && 'code' in error) {
+    const code = error.code;
+    const tooLarge = code === 'LIMIT_FILE_SIZE';
+    response.status(tooLarge ? 413 : 400).json({ error: {
+      code: tooLarge ? 'PAYLOAD_TOO_LARGE' : 'BAD_UPLOAD',
+      message: tooLarge ? 'Upload exceeds the configured file-size limit. Choose a smaller CSV.' : 'Upload one CSV file using the file field.',
+    } });
+    return;
+  }
   if (error instanceof ZodError) {
     response.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Request validation failed.', details: error.issues } });
     return;

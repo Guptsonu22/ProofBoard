@@ -11,6 +11,7 @@ import { sessionCookieOptions } from './auth/session-options.js';
 import { prisma } from './db/client.js';
 import { errorHandler, notFoundHandler } from './lib/errors.js';
 import { resourcesRouter } from './resources/routes.js';
+import { datasetsRouter } from './datasets/routes.js';
 
 export const app = express();
 app.disable('x-powered-by');
@@ -32,6 +33,7 @@ app.get('/api/health', (_request, response) => {
 });
 
 app.use('/api/auth', authRouter);
+app.use('/api/datasets', datasetsRouter);
 app.use('/api', resourcesRouter);
 
 if (env.NODE_ENV === 'production') {

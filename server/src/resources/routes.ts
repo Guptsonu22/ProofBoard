@@ -28,7 +28,7 @@ resourcesRouter.get('/datasets/:datasetId', requireAuth, validateParams(datasetP
     const { datasetId } = request.params as z.infer<typeof datasetParams>;
     const dataset = await prisma.dataset.findFirst({
       where: { id: datasetId, userId: ownerId(response) },
-      select: { id: true, name: true, originalFileName: true, createdAt: true, updatedAt: true },
+      select: { id: true, name: true, originalFileName: true, createdAt: true, updatedAt: true, sourceRecordCount: true, parsedRowCount: true, rejectedRowCount: true, columns: true },
     });
     if (!dataset) throw missingResource();
     response.json({ dataset });
@@ -42,7 +42,7 @@ resourcesRouter.patch('/datasets/:datasetId', requireAuth, validateParams(datase
     const userId = ownerId(response);
     const changed = await prisma.dataset.updateMany({ where: { id: datasetId, userId }, data: { name } });
     if (!changed.count) throw missingResource();
-    const dataset = await prisma.dataset.findFirst({ where: { id: datasetId, userId }, select: { id: true, name: true, originalFileName: true, createdAt: true, updatedAt: true } });
+    const dataset = await prisma.dataset.findFirst({ where: { id: datasetId, userId }, select: { id: true, name: true, originalFileName: true, createdAt: true, updatedAt: true, sourceRecordCount: true, parsedRowCount: true, rejectedRowCount: true, columns: true } });
     if (!dataset) throw missingResource();
     response.json({ dataset });
   } catch (error) { next(error); }

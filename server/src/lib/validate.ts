@@ -24,3 +24,12 @@ export function validateParams<T>(schema: ZodType<T>): RequestHandler {
     next();
   };
 }
+
+export function validateQuery<T>(schema: ZodType<T>): RequestHandler {
+  return (request, response, next) => {
+    const result = schema.safeParse(request.query);
+    if (!result.success) { next(result.error); return; }
+    response.locals.validatedQuery = result.data;
+    next();
+  };
+}

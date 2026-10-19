@@ -13,6 +13,7 @@ export async function clearTestDatabase() {
   await prisma.shareLink.deleteMany();
   await prisma.authSession.deleteMany();
   await prisma.report.deleteMany();
+  await prisma.datasetRow.deleteMany();
   await prisma.dataset.deleteMany();
   await prisma.user.deleteMany();
 }

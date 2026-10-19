@@ -7,6 +7,7 @@ const envSchema = z.object({
   CLIENT_ORIGIN: z.string().url().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1).default('file:./dev.db'),
   SESSION_SECRET: z.string().min(32),
+  CSV_MAX_UPLOAD_BYTES: z.coerce.number().int().min(1024).max(20 * 1024 * 1024).default(5 * 1024 * 1024),
 }).superRefine((values, context) => {
   if (values.NODE_ENV === 'production' && values.SESSION_SECRET.startsWith('proofboard-local-development-placeholder-')) {
     context.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Set a unique production session secret.' });
