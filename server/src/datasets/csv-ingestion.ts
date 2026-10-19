@@ -54,22 +54,19 @@ export function parseCsv(buffer: Buffer): ParsedCsv {
       bom: true, columns: false, skip_empty_lines: true, skip_records_with_error: true,
       relax_column_count: true, raw: true, info: true, max_record_size: MAX_RECORD_CHARS,
       on_skip(error: CsvError | undefined, raw: string | undefined) {
-        malformed.push({ raw: raw ?? '', reason: friendlyCsvError(error), line: error?.lines ?? 1 });
+        malformed.push({ raw: raw ?? '', reason: friendlyCsvError(error), line: typeof error?.lines === 'number' ? error.lines : 1 });
       },
-    }) as ParsedRecord[];
+    }) as unknown as ParsedRecord[];
   } catch (error) {
     throw new AppError(400, 'MALFORMED_CSV', `The CSV could not be parsed: ${friendlyCsvError(error as CsvError)}. Check the quotes and record length.`);
   }
   if (parsed.length < 2) throw new AppError(400, 'EMPTY_FILE', 'No CSV data rows were found. Add a header row and at least one data row.');
-  const headers = parsed[0].record;
+  const headers = parsed[0]!.record;
   if (!headers.length || headers.length > MAX_COLUMNS) throw new AppError(400, 'COLUMN_LIMIT', `CSV files must have between 1 and ${MAX_COLUMNS} columns.`);
   const dataRecords = parsed.slice(1);
   if (dataRecords.length + malformed.length > MAX_ROWS) throw new AppError(413, 'ROW_LIMIT', `This file exceeds the ${MAX_ROWS.toLocaleString()} source-row limit.`);
 
   const rows: IngestRow[] = [];
-  const sourceCount = dataRecords.length + malformed.length;
-  let dataIdx = 0;
-  let malformedIdx = 0;
   // Merge recoverable parser errors and valid records by their original source line.
   const events = [
     ...dataRecords.map((entry, index) => ({ kind: 'parsed' as const, entry, line: entry.info.lines, tie: index })),
@@ -80,15 +77,12 @@ export function parseCsv(buffer: Buffer): ParsedCsv {
     if (event.kind === 'bad') {
       const reason = `Malformed CSV record: ${event.entry.reason}`;
       rows.push({ ordinal, sourceRow: ordinal + 1, sourceLine: event.line, values: [event.entry.raw.slice(0, MAX_RECORD_CHARS)], warnings: [reason], rejected: true, rejectionReason: reason });
-      malformedIdx++;
       continue;
     }
     const record = event.entry.record;
     const reason = record.length !== headers.length ? `Expected ${headers.length} fields but found ${record.length}.` : null;
     rows.push({ ordinal, sourceRow: ordinal + 1, sourceLine: event.line, values: record, warnings: reason ? [reason] : [], rejected: !!reason, rejectionReason: reason });
-    dataIdx++;
   }
-  void sourceCount; void dataIdx; void malformedIdx;
   if (headers.length > MAX_COLUMNS || rows.some((row) => row.values.length > MAX_COLUMNS)) throw new AppError(400, 'COLUMN_LIMIT', `CSV files may contain no more than ${MAX_COLUMNS} columns.`);
 
   const columns = profileColumns(headers, rows.filter((row) => !row.rejected));
