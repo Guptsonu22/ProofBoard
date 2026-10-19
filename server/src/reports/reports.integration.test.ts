@@ -37,4 +37,35 @@ describe('report ownership and evaluation API',()=>{
   const result=await owner.agent.post(`/api/reports/${report.id}/evaluate`).set('Origin',origin).send({definition:{version:1,filters:{dateRange:{columnId:dataset.columns.find((c:{originalName:string})=>c.originalName==='revenue').id,from:'2026-01-01'},categories:[]},blocks:[]}});
   expect(result.status).toBe(400);expect(result.body.error.code).toBe('REPORT_VALIDATION');
  });
+ it('rejects invalid columns, operations, filters, and sort controls before evaluation',async()=>{
+  const owner=await signed('report-parameters@example.com');const uploaded=await owner.agent.post('/api/datasets').set('Origin',origin).attach('file',Buffer.from(sales),{filename:'sample-sales.csv',contentType:'text/csv'});const dataset=uploaded.body.dataset;
+  const report=(await owner.agent.post('/api/reports').set('Origin',origin).send({datasetId:dataset.id,name:'Validation'})).body.report;
+  const revenue=dataset.columns.find((column:{originalName:string})=>column.originalName==='revenue').id;
+  const region=dataset.columns.find((column:{originalName:string})=>column.originalName==='region').id;
+  const base=(block:unknown,filters={categories:[]})=>({version:1,filters,blocks:[block]});
+  const cases=[
+   base({id:'bad-column',type:'metric',title:'Bad column',columnId:'revenue; DROP TABLE DatasetRow',operation:'sum'}),
+   base({id:'bad-operation',type:'metric',title:'Bad operation',columnId:revenue,operation:'delete'}),
+   base({id:'bad-filter',type:'metric',title:'Bad filter',columnId:revenue,operation:'sum'},{dateRange:{columnId:revenue,from:'2026-01-01'},categories:[]}),
+   base({id:'bad-category-filter',type:'metric',title:'Bad category',columnId:revenue,operation:'sum'},{categories:[{columnId:revenue,values:['10'] }]}),
+   base({id:'bad-sort',type:'table',title:'Bad sort',orderByColumnId:region,direction:'desc; DROP TABLE DatasetRow',limit:10}),
+   base({id:'bad-sort-column',type:'table',title:'Bad sort column',orderByColumnId:'amount + (select 1)',direction:'desc',limit:10}),
+  ];
+  for(const definition of cases){const response=await owner.agent.post(`/api/reports/${report.id}/evaluate`).set('Origin',origin).send({definition});expect(response.status).toBe(400);expect(response.body.error).toBeDefined();}
+ });
+ it('keeps CSV cells and report notes as inert plain text in JSON responses',async()=>{
+  const owner=await signed('report-xss@example.com');
+  const payload='<img src=x onerror=alert(1)>';
+  const uploaded=await owner.agent.post('/api/datasets').set('Origin',origin).attach('file',Buffer.from(`category,amount,note\nsafe,1,"${payload}"`),{filename:'payload.csv',contentType:'text/csv'});
+  expect(uploaded.status).toBe(201);
+  const preview=await owner.agent.get(`/api/datasets/${uploaded.body.dataset.id}/preview`);
+  expect(preview.headers['content-type']).toContain('application/json');
+  expect(preview.body.rows[0].values[2]).toBe(payload);
+  const report=(await owner.agent.post('/api/reports').set('Origin',origin).send({datasetId:uploaded.body.dataset.id,name:'Plain text'})).body.report;
+  const note='<script>alert("proofboard")</script>';
+  const evaluation=await owner.agent.post(`/api/reports/${report.id}/evaluate`).set('Origin',origin).send({definition:{version:1,filters:{categories:[]},blocks:[{id:'note',type:'note',title:'Untrusted note',text:note}]}});
+  expect(evaluation.status).toBe(200);
+  expect(evaluation.headers['content-type']).toContain('application/json');
+  expect(evaluation.body.evaluation.blocks[0].result.text).toBe(note);
+ });
 });

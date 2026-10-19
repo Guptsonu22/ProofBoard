@@ -17,6 +17,9 @@ import { publicShareRouter, sharingRouter } from './shares/routes.js';
 
 export const app = express();
 app.disable('x-powered-by');
+// The production server binds to loopback behind one TLS-terminating proxy.
+// Trust only that proxy hop so Secure cookies work without trusting client headers directly.
+if (env.NODE_ENV === 'production') app.set('trust proxy', 1);
 app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
 app.use(express.json({ limit: '100kb' }));
 app.use(session({

@@ -71,4 +71,12 @@ describe('independent report evaluation engine',()=>{
   expect(output[2]?.exclusionReasons).toEqual({'Missing or invalid sort value: revenue':1,'Outside top N limit':9});
  });
  it('supports notes with no row calculations',()=>{expect(evaluateReport(emptyDefinition,dataset).blocks).toEqual([]);});
+ it('returns an explicit calculation error when a finite numeric sum exceeds the JSON number range',()=>{
+  const revenueIndex=parsed.columns.findIndex((column)=>column.originalName==='revenue');
+  const extremeRows=dataset.rows.slice(0,2).map((row,index)=>({...row,values:parsed.columns.map((_,columnIndex)=>columnIndex===revenueIndex?'1e308':Array.isArray(row.values)?row.values[columnIndex]??'':'' )}));
+  const extremeDataset={...dataset,rows:extremeRows};
+  expect(()=>evaluateReport(def([{id:'sum',type:'metric',title:'Huge total',columnId:col('revenue'),operation:'sum'}]),extremeDataset)).toThrow(/supported numeric range/);
+  const average=evaluateReport(def([{id:'average',type:'metric',title:'Huge average',columnId:col('revenue'),operation:'average'}]),extremeDataset).blocks[0]!;
+  expect(average.result).toEqual({value:1e308,count:2});
+ });
 });

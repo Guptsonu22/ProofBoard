@@ -45,6 +45,25 @@ function typed(value: string, type: ColumnProfile['type']): number | string | nu
   return input;
 }
 function counted(reason: string, map: ReasonCounts): void { map[reason] = (map[reason] ?? 0) + 1; }
+function aggregateNumbers(values: number[], operation: 'sum' | 'average' | 'count' | 'min' | 'max'): number {
+  if (operation === 'count') return values.length;
+  if (operation === 'min') return Math.min(...values);
+  if (operation === 'max') return Math.max(...values);
+  const scale = Math.max(...values.map(Math.abs));
+  if (scale === 0) return 0;
+  // Scaling prevents intermediate overflow for averages and cancellation-heavy sums.
+  let scaledSum = 0;
+  let correction = 0;
+  for (const value of values) {
+    const adjusted = value / scale - correction;
+    const next = scaledSum + adjusted;
+    correction = (next - scaledSum) - adjusted;
+    scaledSum = next;
+  }
+  const result = operation === 'average' ? (scaledSum / values.length) * scale : scaledSum * scale;
+  if (!Number.isFinite(result)) fail('This calculation exceeds the supported numeric range. Narrow the data with report filters and try again.');
+  return result;
+}
 
 export function evaluateReport(input: unknown, dataset: EvaluationDataset) {
   const parsed = reportDefinitionSchema.safeParse(input);
@@ -115,8 +134,7 @@ function evaluateBlock(block: ReportBlock, columns: ColumnProfile[], rows: Evalu
       }
       const collection = values.get(key) ?? []; collection.push(typeof value === 'number' ? value : 1); values.set(key, collection); included++;
     }
-    const calculate = (input: number[]) => block.operation === 'count' ? input.length : block.operation === 'sum' ? input.reduce((a,b)=>a+b,0) : block.operation === 'average' ? input.reduce((a,b)=>a+b,0)/input.length : block.operation === 'min' ? Math.min(...input) : Math.max(...input);
-    const result = group ? [...values].map(([key, input]) => ({ group: keys.get(key), value: calculate(input), count: input.length })) : { value: values.size ? calculate(values.get('') ?? []) : null, count: values.get('')?.length ?? 0 };
+    const result = group ? [...values].map(([key, input]) => ({ group: keys.get(key), value: aggregateNumbers(input, block.operation), count: input.length })) : { value: values.size ? aggregateNumbers(values.get('') ?? [], block.operation) : null, count: values.get('')?.length ?? 0 };
     return finish(included, result, operation, [measure,...(group?[group]:[])], `${block.operation} of ${measure.displayName}${group?` grouped by ${group.displayName}`:''}. Count counts valid, nonblank values; other operations require a numeric column.`, considered-included);
   }
 
@@ -127,7 +145,7 @@ function evaluateBlock(block: ReportBlock, columns: ColumnProfile[], rows: Evalu
     const operation = { type: 'chart', chartType: block.chartType, operation: block.operation, dimensionColumnId: dimension.id, measureColumnId: measure.id, order: dimension.type === 'date' ? 'date ascending' : 'first-seen dimension order' };
     const groups = new Map<string, number[]>(); let included=0;
     for(const row of rows){const dim=typed(raw(row,index(dimension)),dimension.type);if(dim===null){addInvalid(`Missing or invalid dimension: ${dimension.displayName}`);continue;}const value=typed(raw(row,index(measure)),'number');if(value===null){addInvalid(raw(row,index(measure)).trim()?`Invalid number: ${measure.displayName}`:`Missing value: ${measure.displayName}`);continue;}const list=groups.get(String(dim))??[];list.push(value as number);groups.set(String(dim),list);included++;}
-    const series=[...groups].map(([label,input])=>({label,value:block.operation==='count'?input.length:block.operation==='sum'?input.reduce((a,b)=>a+b,0):block.operation==='average'?input.reduce((a,b)=>a+b,0)/input.length:block.operation==='min'?Math.min(...input):Math.max(...input),count:input.length}));
+    const series=[...groups].map(([label,input])=>({label,value:aggregateNumbers(input,block.operation),count:input.length}));
     if (dimension.type === 'date') series.sort((a,b)=>a.label.localeCompare(b.label));
     return finish(included,{series}, operation,[dimension,measure],`${block.operation} of ${measure.displayName} by ${dimension.displayName}. Dates are chronological; categories follow their first source occurrence.`,considered-included);
   }
