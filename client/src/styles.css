@@ -10,6 +10,10 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .nav-item:hover { background:#f6f7fb; color:#30394a; }
 .nav-item-active { background:#f0efff; color:#584bd4; font-weight:600; }
 .avatar { display:flex; width:34px; height:34px; flex-shrink:0; align-items:center; justify-content:center; border:1px solid #e0defb; border-radius:50%; background:#f2f1ff; color:#5d51cd; font-size:11px; font-weight:700; }
+.icon-button { display:flex; width:32px; height:32px; flex-shrink:0; align-items:center; justify-content:center; border:1px solid transparent; border-radius:8px; background:transparent; color:#7b8495; }
+.icon-button:hover { border-color:#e7e9f0; background:#f8f9fc; color:#465064; }
+.form-input { display:block; width:100%; border:1px solid #dfe3ec; border-radius:9px; background:white; padding:11px 12px; color:#172033; outline:none; transition:border-color .15s,box-shadow .15s; }
+.form-input:focus { border-color:#7668ee; box-shadow:0 0 0 3px #7668ee20; }
 .button-primary,.button-secondary,.button-quiet { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:9px; font-size:12px; font-weight:600; transition:background .15s; }
 .button-primary { border:1px solid #5b4bd6; background:#5b4bd6; padding:10px 14px; color:#fff; box-shadow:0 2px 4px #5143cc26; }
 .button-secondary { border:1px solid #dfe2eb; background:white; padding:9px 13px; color:#394356; }

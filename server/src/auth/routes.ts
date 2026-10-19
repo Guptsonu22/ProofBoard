@@ -1,6 +1,6 @@
-import { Router } from 'express';
-import { randomBytes } from 'node:crypto';
+import { Router, type Request } from 'express';
 import { Prisma } from '@prisma/client';
+import { rateLimit } from 'express-rate-limit';
 import { z } from 'zod';
 import { env } from '../config/env.js';
 import { prisma } from '../db/client.js';
@@ -23,7 +23,7 @@ type PublicUser = { id: string; email: string; createdAt: Date };
 const publicUserSelect = { id: true, email: true, createdAt: true } as const;
 export const authRouter = Router();
 
-function regenerateSession(request: Parameters<Parameters<typeof authRouter.post>[1]>[0], userId: string): Promise<void> {
+function regenerateSession(request: Request, userId: string): Promise<void> {
   return new Promise((resolve, reject) => {
     request.session.regenerate((error) => {
       if (error) return reject(error);
@@ -33,7 +33,23 @@ function regenerateSession(request: Parameters<Parameters<typeof authRouter.post
   });
 }
 
-authRouter.post('/register', validateBody(registrationSchema), async (request, response, next) => {
+const registrationLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_request, response) => response.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many registration attempts. Please try again later.' } }),
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_request, response) => response.status(429).json({ error: { code: 'RATE_LIMITED', message: 'Too many login attempts. Please try again later.' } }),
+});
+
+authRouter.post('/register', registrationLimiter, validateBody(registrationSchema), async (request, response, next) => {
   try {
     const { email, password } = request.body as z.infer<typeof registrationSchema>;
     const passwordHash = await hashPassword(password);
@@ -49,7 +65,7 @@ authRouter.post('/register', validateBody(registrationSchema), async (request, r
   }
 });
 
-authRouter.post('/login', validateBody(credentialsSchema), async (request, response, next) => {
+authRouter.post('/login', loginLimiter, validateBody(credentialsSchema), async (request: Request, response, next) => {
   try {
     const { email, password } = request.body as z.infer<typeof credentialsSchema>;
     const userWithHash = await prisma.user.findUnique({ where: { email }, select: { ...publicUserSelect, passwordHash: true } });

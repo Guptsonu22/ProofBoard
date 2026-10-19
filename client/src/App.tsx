@@ -1,9 +1,38 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Route, Routes } from 'react-router-dom';
-import { Activity, ArrowUpRight, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDashboard, Plus, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
-import { getHealth } from './lib/api';
+import { Activity, ArrowUpRight, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDashboard, LogOut, Plus, Settings2, ShieldCheck, Sparkles } from 'lucide-react';
+import { authenticate, getCurrentUser, getHealth, logout, type PublicUser } from './lib/api';
 
 function App() {
+  const [user, setUser] = useState<PublicUser | null>(null);
+  const [authState, setAuthState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [authError, setAuthError] = useState('');
+  const [logoutBusy, setLogoutBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getCurrentUser()
+      .then((currentUser) => { if (active) { setUser(currentUser); setAuthState('ready'); } })
+      .catch(() => { if (active) { setAuthError('The account service is unavailable. Please try again.'); setAuthState('error'); } });
+    return () => { active = false; };
+  }, []);
+
+  async function signOut() {
+    setLogoutBusy(true);
+    setAuthError('');
+    try {
+      await logout();
+      setUser(null);
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : 'Could not sign out.');
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
+
+  if (authState === 'loading') return <CenteredState title="Checking your session…" />;
+  if (!user) return <AuthScreen initialError={authError} onAuthenticated={setUser} />;
+
   return (
     <div className="min-h-screen bg-[#f7f8fc] text-slate-900 md:flex">
       <aside className="sidebar fixed inset-y-0 left-0 z-20 hidden w-[248px] flex-col border-r border-slate-200/80 bg-white md:flex">
@@ -30,7 +59,8 @@ function App() {
           </nav>
           <div className="mt-5 flex items-center gap-3 border-t border-slate-100 px-2 pt-4">
             <div className="avatar">PB</div>
-            <div className="min-w-0"><p className="text-sm font-semibold">Local workspace</p><p className="truncate text-xs text-slate-500">No account connected</p></div>
+            <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Your workspace</p><p className="truncate text-xs text-slate-500">{user.email}</p></div>
+            <button type="button" className="icon-button" onClick={signOut} disabled={logoutBusy} aria-label="Sign out" title="Sign out"><LogOut size={16} /></button>
           </div>
         </div>
       </aside>
@@ -42,13 +72,57 @@ function App() {
         </header>
         <div className="mx-auto max-w-[1180px] px-5 py-8 md:px-9 md:py-10">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Dashboard email={user.email} />} />
             <Route path="*" element={<ComingSoon />} />
           </Routes>
         </div>
       </main>
     </div>
   );
+}
+
+function AuthScreen({ initialError, onAuthenticated }: { initialError: string; onAuthenticated: (user: PublicUser) => void }) {
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(initialError);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      onAuthenticated(await authenticate(mode, email, password));
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Authentication failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <main className="flex min-h-screen items-center justify-center bg-[#f7f8fc] px-5 py-10">
+    <section className="w-full max-w-[420px] rounded-2xl border border-slate-200/80 bg-white p-7 shadow-[0_12px_50px_rgba(15,23,42,0.07)] sm:p-9">
+      <div className="mb-8 flex items-center gap-3"><div className="brand-mark"><BarChart3 size={19} strokeWidth={2.5} /></div><span className="text-[17px] font-bold tracking-tight">proof<span className="text-indigo-600">board</span></span></div>
+      <p className="mb-2 text-xs font-semibold tracking-[.12em] text-indigo-600">YOUR DATA, MADE CLEAR</p>
+      <h1 className="text-2xl font-bold tracking-tight">{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1>
+      <p className="mt-2 text-sm leading-6 text-slate-500">{mode === 'login' ? 'Sign in to continue to your reporting workspace.' : 'Set up a secure account for your private workspace.'}</p>
+      <form className="mt-7 space-y-4" onSubmit={submit}>
+        <label className="block text-sm font-medium text-slate-700">Email address<input className="form-input mt-1.5" type="email" name="email" autoComplete="email" required maxLength={254} value={email} onChange={(event) => setEmail(event.target.value)} /></label>
+        <label className="block text-sm font-medium text-slate-700">Password<input className="form-input mt-1.5" type="password" name="password" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} required minLength={mode === 'register' ? 12 : 1} maxLength={72} value={password} onChange={(event) => setPassword(event.target.value)} /><span className="mt-1 block text-xs font-normal text-slate-400">{mode === 'register' ? 'Use 12 or more characters (maximum 72 bytes).' : 'Enter your account password.'}</span></label>
+        {error && <p className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">{error}</p>}
+        <button className="button-primary w-full justify-center py-3" type="submit" disabled={busy}>{busy ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account'}</button>
+      </form>
+      <p className="mt-6 text-center text-sm text-slate-500">{mode === 'login' ? 'New to ProofBoard?' : 'Already have an account?'}{' '}
+        <button className="font-semibold text-indigo-600 hover:text-indigo-800" type="button" onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}>{mode === 'login' ? 'Create an account' : 'Sign in'}</button>
+      </p>
+      <p className="mt-5 text-center text-xs text-slate-400">Your session stays in a secure, HTTP-only cookie.</p>
+    </section>
+  </main>;
+}
+
+function CenteredState({ title }: { title: string }) {
+  return <main className="flex min-h-screen items-center justify-center bg-[#f7f8fc] text-sm text-slate-500"><span className="mr-2 h-2 w-2 animate-pulse rounded-full bg-indigo-500" />{title}</main>;
 }
 
 function NavItem({ to, icon, label }: { to: string; icon: React.ReactNode; label: string }) {
@@ -68,10 +142,10 @@ function HealthStatus() {
   </div>;
 }
 
-function Dashboard() {
+function Dashboard({ email }: { email: string }) {
   return <>
     <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-      <div><div className="mb-2 flex items-center gap-2 text-xs font-medium text-indigo-600"><Activity size={14} /> YOUR DATA, MADE CLEAR</div><h1 className="text-3xl font-bold tracking-tight md:text-[34px]">Good to see you.</h1><p className="mt-2 text-sm text-slate-500">A clear view of your reporting workspace.</p></div>
+      <div><div className="mb-2 flex items-center gap-2 text-xs font-medium text-indigo-600"><Activity size={14} /> YOUR DATA, MADE CLEAR</div><h1 className="text-3xl font-bold tracking-tight md:text-[34px]">Good to see you, {email.split('@')[0]}.</h1><p className="mt-2 text-sm text-slate-500">A clear view of your reporting workspace.</p></div>
       <button className="button-primary w-fit" disabled title="Dataset upload will be available in a later phase"><Plus size={16} /> Create a report</button>
     </div>
     <section className="grid gap-4 sm:grid-cols-3" aria-label="Workspace summary">

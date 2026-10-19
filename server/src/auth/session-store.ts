@@ -1,7 +1,6 @@
 import session from 'express-session';
 import type { PrismaClient } from '@prisma/client';
-
-const SESSION_LIFETIME_MS = 7 * 24 * 60 * 60 * 1000;
+import { SESSION_LIFETIME_MS } from './session-options.js';
 
 export class PrismaSessionStore extends session.Store {
   constructor(private readonly prisma: PrismaClient) {
