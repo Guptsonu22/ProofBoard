@@ -103,11 +103,12 @@ function evaluateBlock(block: ReportBlock, columns: ColumnProfile[], rows: Evalu
     const dimension = column(columns, block.dimensionColumnId); const measure = column(columns, block.measureColumnId);
     if (!['category','date'].includes(dimension.type)) fail('Chart dimensions must be category or date columns.');
     if (measure.type !== 'number') fail('Chart measures must be numeric columns.');
-    plan.operation = { type: 'chart', chartType: block.chartType, operation: block.operation, dimensionColumnId: dimension.id, measureColumnId: measure.id, order: 'first-seen dimension order' };
+    plan.operation = { type: 'chart', chartType: block.chartType, operation: block.operation, dimensionColumnId: dimension.id, measureColumnId: measure.id, order: dimension.type === 'date' ? 'date ascending' : 'first-seen dimension order' };
     const groups = new Map<string, number[]>(); let included=0;
     for(const row of rows){const dim=typed(raw(row,index(dimension)),dimension.type);if(dim===null){addInvalid(`Missing or invalid dimension: ${dimension.displayName}`);continue;}const value=typed(raw(row,index(measure)),'number');if(value===null){addInvalid(raw(row,index(measure)).trim()?`Invalid number: ${measure.displayName}`:`Missing value: ${measure.displayName}`);continue;}const list=groups.get(String(dim))??[];list.push(value as number);groups.set(String(dim),list);included++;}
     const series=[...groups].map(([label,input])=>({label,value:block.operation==='count'?input.length:block.operation==='sum'?input.reduce((a,b)=>a+b,0):block.operation==='average'?input.reduce((a,b)=>a+b,0)/input.length:block.operation==='min'?Math.min(...input):Math.max(...input),count:input.length}));
-    return finish(included,{series}, {type:'chart',chartType:block.chartType,operation:block.operation,dimensionColumnId:dimension.id,measureColumnId:measure.id},[dimension,measure],`${block.operation} of ${measure.displayName} by ${dimension.displayName}. Points follow the first source occurrence of each dimension.`,considered-included);
+    if (dimension.type === 'date') series.sort((a,b)=>a.label.localeCompare(b.label));
+    return finish(included,{series}, {type:'chart',chartType:block.chartType,operation:block.operation,dimensionColumnId:dimension.id,measureColumnId:measure.id},[dimension,measure],`${block.operation} of ${measure.displayName} by ${dimension.displayName}. Dates are chronological; categories follow their first source occurrence.`,considered-included);
   }
 
   const orderColumn=column(columns,block.orderByColumnId); plan.operation={type:'table',orderByColumnId:orderColumn.id,direction:block.direction,limit:block.limit};

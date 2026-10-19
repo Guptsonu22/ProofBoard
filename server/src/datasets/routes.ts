@@ -11,6 +11,7 @@ import { validateParams, validateQuery } from '../lib/validate.js';
 import { parseCsv } from './csv-ingestion.js';
 
 const datasetParams = z.object({ datasetId: z.string().min(1).max(64) });
+const categoryParams = z.object({ datasetId: z.string().min(1).max(64), columnId: z.string().min(1).max(64) });
 const previewQuery = z.object({ limit: z.coerce.number().int().min(1).max(100).default(50), offset: z.coerce.number().int().min(0).max(50_000).default(0) });
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: env.CSV_MAX_UPLOAD_BYTES, files: 1, fields: 0, parts: 1 } });
 
@@ -35,6 +36,21 @@ datasetsRouter.get('/', async (_request, response, next) => {
       select: { id: true, name: true, originalFileName: true, sourceRecordCount: true, parsedRowCount: true, rejectedRowCount: true, createdAt: true, columns: true },
     });
     response.json({ datasets });
+  } catch (error) { next(error); }
+});
+
+datasetsRouter.get('/:datasetId/categories/:columnId', validateParams(categoryParams), async (request, response, next) => {
+  try {
+    const owner = userId(response);
+    const { datasetId, columnId } = request.params as z.infer<typeof categoryParams>;
+    const dataset = await prisma.dataset.findFirst({ where: { id: datasetId, userId: owner }, select: { id: true, columns: true } });
+    if (!dataset) throw notFound();
+    const columns = dataset.columns as unknown as Array<{ id: string; type: string }>;
+    if (!columns.some((column) => column.id === columnId && column.type === 'category')) throw new AppError(400, 'INVALID_COLUMN', 'Choose a category column from this dataset.');
+    const rows = await prisma.datasetRow.findMany({ where: { datasetId, userId: owner, rejected: false }, orderBy: { ordinal: 'asc' }, select: { values: true } });
+    const index = columns.findIndex((column) => column.id === columnId);
+    const values = [...new Set(rows.map((row) => Array.isArray(row.values) && typeof row.values[index] === 'string' ? row.values[index] as string : '').filter((value) => value.trim() !== ''))];
+    response.json({ values: values.slice(0, 1000), total: values.length, truncated: values.length > 1000 });
   } catch (error) { next(error); }
 });
 

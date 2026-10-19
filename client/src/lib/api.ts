@@ -35,6 +35,7 @@ export async function getDataset(id: string): Promise<Dataset> {
   const result = await jsonRequest<{ dataset: Dataset }>(`/api/datasets/${encodeURIComponent(id)}`);
   return result.dataset;
 }
+export async function getDatasetCategories(datasetId:string,columnId:string):Promise<{values:string[];total:number;truncated:boolean}>{return jsonRequest(`/api/datasets/${encodeURIComponent(datasetId)}/categories/${encodeURIComponent(columnId)}`);}
 export async function getDatasetPreview(id: string): Promise<PreviewRow[]> {
   const result = await jsonRequest<{ rows: PreviewRow[] }>(`/api/datasets/${encodeURIComponent(id)}/preview?limit=50`);
   return result.rows;

@@ -1,6 +1,6 @@
 # ProofBoard
 
-ProofBoard is a CSV report builder. It provides account registration and login, persistent server-side sessions, private CSV upload, data profiling, a row preview, and row-level quality warnings. Report calculations and sharing are later phases; the interface does not show fabricated report data.
+ProofBoard is a CSV report builder. It provides account registration and login, persistent server-side sessions, private CSV upload, data profiling, a row preview, row-level quality warnings, and a server-evaluated report builder with calculation provenance.
 
 ## Requirements
 
@@ -49,7 +49,13 @@ npm start
 npm test
 ```
 
-The server test command resets only the ignored `server/prisma/test.db` with the current Prisma schema, then runs integration tests. It covers authentication, session persistence, CSV parsing and profiling, malformed and oversized inputs, data preservation, and cross-user access isolation.
+The server test command resets only the ignored `server/prisma/test.db` with the current Prisma schema, then runs unit and integration tests. It covers authentication, session persistence, CSV parsing and profiling, malformed and oversized inputs, report calculations against `server/src/reports/fixtures/sample-sales.csv`, and cross-user access isolation.
+
+## Reports and calculation rules
+
+Create a report from a private dataset at **Reports**. Metric, chart, table, and plain-text note blocks are saved as a versioned JSON definition. A preview sends the current definition to the server; the server looks up the report and dataset using the authenticated user, resolves stable column IDs against stored metadata, applies report filters, and evaluates all blocks. No browser-side aggregation is used. Calculation proof includes the executed structured plan, included and excluded row counts, exclusion reasons, selected columns, filters, result, and missing/invalid-value policy. The evaluator runs in memory over owner-scoped Prisma results, so proof explicitly says no SQL was executed.
+
+Blank cells and invalid typed numbers or dates are excluded from the affected block and never coerced to zero. `count` counts valid, nonblank values in the selected column. Sum, average, minimum, and maximum require a number column. Repeated records count independently; negative numbers participate normally. Grouped metrics require a category column. Charts require a category or date dimension and numeric measure; date points are chronological and category points follow first source occurrence. Tables rank valid sort values and retain original source-row numbers; equal sort values keep source order. Only the selected top N rows are displayed.
 
 ## Environment variables
 
@@ -65,11 +71,13 @@ The server treats blank or whitespace-only cells as missing and keeps them in pa
 client/                 React, TypeScript, Vite, Tailwind, Router, Recharts
   src/lib/               API client
   src/datasets/          Dataset upload, list, profile, and preview UI
+  src/reports/           Report list, block editor, server preview, and proof UI
   src/                   Application shell and styles
 server/                  Express, TypeScript, Prisma, SQLite
   prisma/                Database schema and migrations
   src/auth/               Session store, auth, CSRF and auth routes
   src/datasets/           CSV parser, inference, upload, and private preview APIs
+  src/reports/            Versioned report definitions and independent evaluator
   src/resources/          Owner-scoped dataset and report metadata routes
   src/config/             Validated environment configuration
   src/lib/                Errors and request validation
