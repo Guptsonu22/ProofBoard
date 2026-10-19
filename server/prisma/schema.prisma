@@ -8,7 +8,70 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  sessions     AuthSession[]
+  datasets     Dataset[]
+  reports      Report[]
+}
+
+model AuthSession {
+  sid       String   @id
+  data      String
+  userId    String?
+  expiresAt DateTime
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Dataset {
+  id               String   @id @default(cuid())
+  userId           String
+  name             String
+  originalFileName String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports          Report[]
+
+  @@unique([id, userId])
+  @@index([userId, createdAt])
+}
+
+model Report {
+  id        String      @id @default(cuid())
+  userId    String
+  datasetId String
+  name      String
+  definition Json?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dataset   Dataset     @relation(fields: [datasetId, userId], references: [id, userId], onDelete: Cascade)
+  shareLinks ShareLink[]
+
+  @@unique([id, userId])
+  @@index([userId, createdAt])
+  @@index([datasetId, userId])
+}
+
+model ShareLink {
+  id        String    @id @default(cuid())
+  reportId  String
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime?
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  report    Report    @relation(fields: [reportId, userId], references: [id, userId], onDelete: Cascade)
+
+  @@index([reportId, userId])
+  @@index([expiresAt])
 }
