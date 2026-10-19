@@ -1,15 +1,23 @@
 # ProofBoard
 
-ProofBoard is a CSV report builder. It provides account registration and login, persistent server-side sessions, private CSV upload, data profiling, a row preview, row-level quality warnings, and a server-evaluated report builder with calculation provenance.
+ProofBoard is a CSV report builder that profiles uploaded data, evaluates report blocks on the server, shows calculation provenance, and shares read-only report snapshots.
 
-## Requirements
+## Features and stack
 
-- Node.js 20.19+ (Node 22 LTS recommended)
-- npm 10+
+- User registration and sign-in with bcrypt password hashes, HTTP-only sessions stored in SQLite, same-origin write protection, and per-user resource authorization.
+- Server-side CSV parsing, type inference, quality profiling, row preview, and warnings.
+- Persistent reports with metric, chart, top-N table, and plain-text note blocks; shared report filters and calculation proofs.
+- Hashed share tokens, immutable evaluated snapshots, expiry, and revocation.
+- React 19, TypeScript, Vite, Tailwind CSS, React Router, Recharts; Node.js, Express, Prisma, SQLite, Zod, Vitest, and Supertest.
 
-## Setup in Windows PowerShell
+## Prerequisites
 
-From the project folder:
+- Node.js 20.19 or newer and npm 10 or newer.
+- PowerShell on Windows.
+
+## Windows PowerShell setup
+
+Run these commands from the repository root. The migrations use `file:./dev.db`, resolved relative to `server/prisma/schema.prisma`; SQLite needs the empty database file to exist before Prisma migration commands run.
 
 ```powershell
 Copy-Item .env.example server/.env
@@ -17,76 +25,100 @@ npm install
 npm run db:generate
 if (-not (Test-Path server/prisma/dev.db)) { New-Item -ItemType File -Path server/prisma/dev.db | Out-Null }
 npm run db:migrate
-```
-
-The migrations create the local SQLite database. No seed data is needed; create an account from the sign-in screen.
-
-**SQLite setup:** create the empty database file before running Prisma migrations, as shown above. The migration commands were verified against an empty SQLite file and applied all four checked-in migrations. This workspace's existing `server/prisma/dev.db` records a Phase 2 baseline migration named `20261019200000_init`, while the checked-in migration directory uses `20261019000000_init`. Running `npm run db:migrate` against that existing database can fail with a shadow-database `P3006` error. The local schema was synchronized with `prisma db push`, preserving its rows; do not delete that database to work around the migration-history mismatch.
-
-## Run in development
-
-```powershell
 npm run dev
 ```
 
-Open <http://localhost:5173>. The API listens on `http://127.0.0.1:4000`; Vite forwards `/api` requests to it. Confirm the API with:
+Open <http://localhost:5173>. The API listens on port 4000 by default. Check it in another PowerShell window:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:4000/api/health
 ```
 
-## Build and run production output
+`server/.env` is ignored by Git. The example secret is only a local placeholder. Before production, set a unique random `SESSION_SECRET` of at least 32 characters, set `NODE_ENV=production`, and configure `CLIENT_ORIGIN`, `DATABASE_URL`, and a TLS-terminating reverse proxy for the deployed environment.
+
+To build and run the production server after building:
 
 ```powershell
 npm run build
 npm start
 ```
 
-`npm start` launches the production server and serves the built client from `client/dist`. Before production, set `NODE_ENV=production`, replace `SESSION_SECRET` with a unique random value of at least 32 characters, and set `CLIENT_ORIGIN` to the exact HTTPS origin serving the app. Production session cookies are Secure and require HTTPS.
+The server serves `client/dist` when `NODE_ENV=production`.
 
-## Tests
+## Try an upload
+
+Create a small CSV in PowerShell, start the app, register an account, and upload `sample-sales.csv` from the upload screen:
+
+```powershell
+@'
+order_date,region,revenue
+2026-01-01,North,120
+2026-01-02,South,80
+2026-01-03,North,40
+'@ | Set-Content -Encoding utf8 sample-sales.csv
+```
+
+The parser removes a UTF-8 BOM if PowerShell writes one. The repository also includes `server/src/reports/fixtures/sample-sales.csv` for calculation examples.
+
+## Tests and verified results
+
+From the repository root:
 
 ```powershell
 npm test
+npm run build
 ```
 
-The server test command resets only the ignored `server/prisma/test.db` with the current Prisma schema, then runs unit and integration tests. It covers authentication, session persistence, CSV parsing and profiling, malformed and oversized inputs, report calculations against `server/src/reports/fixtures/sample-sales.csv`, and cross-user access isolation.
+The verified run for this README completed with **33 server tests passing across 6 test files** and a successful production build of both server and frontend. Vite reported that the main client bundle exceeds its 500 kB advisory threshold. There is no separate frontend test script or browser end-to-end suite configured. The server test script resets `server/prisma/test.db`; it does not reset the development database.
 
-## Reports and calculation rules
+For an empty local database, migrations were verified using the setup commands above. The current workspace `server/prisma/dev.db`, if present from an earlier schema-sync workflow, has migration history that does not match the checked-in migration chain; `prisma migrate dev` can fail with Prisma `P3006` on that existing file. Preserve that database and investigate its schema history before attempting a migration. A clean database file works with the checked-in migrations.
 
-Create a report from a private dataset at **Reports**. Metric, chart, table, and plain-text note blocks are saved as a versioned JSON definition. A preview sends the current definition to the server; the server looks up the report and dataset using the authenticated user, resolves stable column IDs against stored metadata, applies report filters, and evaluates all blocks. No browser-side aggregation is used. Calculation proof includes the executed structured plan, included and excluded row counts, exclusion reasons, selected columns, filters, result, and missing/invalid-value policy. The evaluator runs in memory over owner-scoped Prisma results, so proof explicitly says no SQL was executed.
+## How my report builder works
 
-Blank cells and invalid typed numbers or dates are excluded from the affected block and never coerced to zero. `count` counts valid, nonblank values in the selected column. Sum, average, minimum, and maximum require a number column. Repeated records count independently; negative numbers participate normally. Grouped metrics require a category column. Charts require a category or date dimension and numeric measure; date points are chronological and category points follow first source occurrence. Tables rank valid sort values and retain original source-row numbers; equal sort values keep source order. Only the selected top N rows are displayed.
+### A. CSV ingestion
 
-## Read-only sharing
+The authenticated upload route accepts one multipart file, with a default 5 MiB upload cap. The parser also limits input to 50,000 source records, 100 columns, and 256,000 characters per record. It decodes UTF-8 strictly, removes a BOM, and uses `csv-parse` for quoted commas, escaped quotes, and multiline fields. Binary/control-byte input, invalid UTF-8, empty input, and unrecoverable quoting produce actionable errors.
 
-An owner can create a share snapshot with a 1, 7, or 30 day expiry, or no expiry. The snapshot freezes the saved report definition, evaluated block results, and calculation provenance. Public links contain a 256-bit random token; SQLite stores only its SHA-256 hash. Public reads recheck revocation and expiry each time, are rate limited, and return `Cache-Control: no-store` with a `no-referrer` policy. Public snapshots omit owner, report, and dataset IDs and do not provide private report or dataset endpoints. Tokens are returned only once at creation; the link manager can list status and revoke links, but cannot recover a lost token.
+Column IDs are stable internal names such as `column_1`; original headers, display names, inferred types, rationale, and profile samples are stored as dataset metadata. Inference is conservative but heuristic: ISO dates need broad consistency; numeric columns need mostly numeric values or a numeric-looking header plus sufficient numeric samples. Headers suggesting measures (for example, `revenue` or `quantity`) help distinguish measures from IDs. ID-like headers, leading zeroes, and mostly unique long integers are treated as identifiers/categories. Low-cardinality text becomes category; remaining values stay text. These clues can still infer a type incorrectly, so a guessed type is not a data contract.
 
-## Environment variables
+Blank cells remain valid parsed records and count as missing values. A valid record with an invalid typed cell gets a warning and remains stored. Recoverable malformed records and field-count mismatches are preserved as rejected row records with source row/line and reason. The response and profile distinguish source record, parsed, and rejected counts. Unrecoverable CSV syntax cannot be safely split into records, so the upload is rejected with a parser error instead of pretending those records were recovered. Values are stored as JSON strings and displayed as text; formulas are never evaluated, and the original file is not retained.
 
-Copy `.env.example` to `server/.env` for local use. `PORT`, `CLIENT_ORIGIN`, `DATABASE_URL`, `SESSION_SECRET`, and `CSV_MAX_UPLOAD_BYTES` are parsed and validated at server startup. The upload limit defaults to 5 MB; CSVs are also limited to 50,000 source records and 100 columns. Browser writes must include the configured same origin; the server also rejects cross-site Fetch Metadata. Passwords are bcrypt hashed, login and registration are rate limited, and session IDs are stored in SQLite. The browser does not store authentication tokens in localStorage. Do not commit `.env` or use local database files in production.
+### B. Calculation flow
 
-## CSV inference
+The upload parser stores row values and metadata in `Dataset`/`DatasetRow`. When a report is evaluated, the server first loads the report and dataset using the user ID from the validated session, then loads that owner's rows by dataset ID in source order. Requested stable column IDs resolve against the dataset's stored column metadata. Zod validates the report definition; the evaluator checks operation and column types before applying date and category filters, then computes metrics, chart series, or ranked table rows in memory.
 
-The server treats blank or whitespace-only cells as missing and keeps them in parsed rows. Numeric inference uses finite decimal values: a column needs at least 95% numeric samples, or a measure-like header and at least three numeric values covering 75% of samples. Date inference accepts ISO dates only: 90% of samples, or a date-like header with at least three valid samples covering 75%. Identifier-like headers, leading zeroes, and mostly unique integer columns stay categorical. Other low-cardinality columns are categorized when distinct values are at most the lower of 50 or 20% of non-empty values; remaining columns are text. Each column profile includes the reason the rule selected its type.
+For example, a `revenue` sum starts with the stored cell strings, applies the same report filters used for the other blocks, parses only valid finite numbers, and sums those numbers on the server. The API returns the value and its provenance together; React renders that returned value and does not recalculate it. The proof includes operation and selected columns, filter configuration, the algorithm description and parameters, included/excluded counts, reasons, and null/invalid policy. It truthfully identifies an in-memory calculation: Prisma ORM loads owner-scoped rows; no SQL aggregation is executed.
 
-## Structure
+For metric/chart blocks, blank and invalid measure values are excluded, never converted to zero. Numeric aggregations require an inferred numeric column; `count` counts valid nonblank values. Duplicate records are separate observations, and negative values remain valid. Missing group keys, chart dimensions, and table sort values are excluded with reasons. Report-filter exclusions and ingestion-rejected records are also accounted for in provenance. Top-N ranking reports records outside the limit separately; rank is distinct from original source row number. A note has no data calculation. If a definition or numeric range is unsupported, evaluation returns an error rather than invented output.
 
-```text
-client/                 React, TypeScript, Vite, Tailwind, Router, Recharts
-  src/lib/               API client
-  src/datasets/          Dataset upload, list, profile, and preview UI
-  src/reports/           Report list, block editor, server preview, and proof UI
-  src/shares/            Share dialog and public snapshot viewer
-  src/                   Application shell and styles
-server/                  Express, TypeScript, Prisma, SQLite
-  prisma/                Database schema and migrations
-  src/auth/               Session store, auth, CSRF and auth routes
-  src/datasets/           CSV parser, inference, upload, and private preview APIs
-  src/reports/            Versioned report definitions and independent evaluator
-  src/shares/             Hashed tokens, immutable snapshots, expiry and revocation checks
-  src/resources/          Owner-scoped dataset and report metadata routes
-  src/config/             Validated environment configuration
-  src/lib/                Errors and request validation
-  src/                    HTTP app and server entry point
-```
+### C. Sharing and security
+
+Creating a share uses 32 random bytes encoded as base64url. Only the SHA-256 token hash is stored; the raw token is returned to the owner to form the public URL. At creation, the server saves a snapshot of the report definition, evaluated results, and provenance, omitting internal owner/dataset/report identifiers and raw CSV access. Later edits to the private report do not change that snapshot.
+
+Each public request hashes and validates its token and checks expiry and revocation against the database. Revocation takes effect on the next request. Public responses are read-only and sent with no-store cache controls and a no-referrer policy. The public route exposes only the snapshot; private dataset/report routes require a session and scope database queries to that session's user. Composite foreign keys also bind dataset rows and reports/shares to their owner. Password hashes and token hashes are not returned by API responses.
+
+### D. Remaining risks and scale
+
+The upload is held in memory, parsed into arrays, then inserted in batches; evaluation loads rows into memory and processes them in JavaScript. A CSV 100 times larger exceeds the current upload/row limits long before it can be evaluated. If limits were raised without redesign, memory use and SQLite write/read latency would become the first failures. The next scale step would be streaming parsing into bounded batches, moving to a server database, and evaluating typed values incrementally or through safe allowlisted query plans. The in-memory login/share rate limits are per process and reset at restart; production multi-instance deployments need a shared limiter store. The app has no configured Content Security Policy, and the client bundle currently exceeds Vite's advisory chunk size.
+
+## Decisions and trade-offs
+
+- SQLite and one npm-workspace repository keep local setup small; SQLite is suited to this take-home scale, not high-write multi-instance use.
+- Dataset cells remain bounded raw strings in JSON so previews preserve source text. Typed values are validated at evaluation time rather than silently rewriting source data.
+- The evaluator uses in-memory operations and provides an explicit structured plan and row accounting. This is easier to audit for the supported limits, but it loads rows into the application process.
+- Shared links snapshot results at creation so the public view remains stable even when the owner edits the source report.
+
+## What was cut for time
+
+- CSV export and import formats beyond CSV.
+- Password recovery and email verification.
+- A separately configured frontend unit-test suite and automated browser end-to-end tests.
+- Streaming ingestion and database-backed distributed rate limiting.
+
+## Actual hours spent
+
+4 to 5 hours.
+
+## How AI was used
+
+AI assistance was used to inspect the implementation, edit code and documentation, add/adjust tests, and run the test/build commands. One concrete AI error occurred while adding overflow protection to aggregation: the first version scaled every sum, which changed ordinary floating-point outputs and failed existing exact-value tests. The failing Vitest run exposed it. The implementation was corrected to preserve the existing arithmetic for normal magnitudes and scale only near overflow; the full server suite then passed (33 tests).
