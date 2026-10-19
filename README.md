@@ -115,9 +115,6 @@ The upload is held in memory, parsed into arrays, then inserted in batches; eval
 - A separately configured frontend unit-test suite and automated browser end-to-end tests.
 - Streaming ingestion and database-backed distributed rate limiting.
 
-## Actual hours spent
-
-4 to 5 hours.
 
 ## How AI was used
 
