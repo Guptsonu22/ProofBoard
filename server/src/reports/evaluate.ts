@@ -51,16 +51,22 @@ function aggregateNumbers(values: number[], operation: 'sum' | 'average' | 'coun
   if (operation === 'max') return Math.max(...values);
   const scale = Math.max(...values.map(Math.abs));
   if (scale === 0) return 0;
-  // Scaling prevents intermediate overflow for averages and cancellation-heavy sums.
+  // Keep the ordinary path's established floating point results. Scale only when
+  // average or sum magnitudes could overflow during accumulation.
+  const useScaledPath = scale > Number.MAX_VALUE / values.length;
   let scaledSum = 0;
   let correction = 0;
   for (const value of values) {
-    const adjusted = value / scale - correction;
+    const term = useScaledPath ? value / scale : value;
+    const adjusted = term - correction;
     const next = scaledSum + adjusted;
     correction = (next - scaledSum) - adjusted;
     scaledSum = next;
+    if (!useScaledPath && !Number.isFinite(scaledSum)) fail('This calculation exceeds the supported numeric range. Narrow the data with report filters and try again.');
   }
-  const result = operation === 'average' ? (scaledSum / values.length) * scale : scaledSum * scale;
+  const result = useScaledPath
+    ? (operation === 'average' ? (scaledSum / values.length) * scale : scaledSum * scale)
+    : operation === 'average' ? scaledSum / values.length : scaledSum;
   if (!Number.isFinite(result)) fail('This calculation exceeds the supported numeric range. Narrow the data with report filters and try again.');
   return result;
 }

@@ -20,7 +20,7 @@ npm run db:migrate
 
 The migrations create the local SQLite database. No seed data is needed; create an account from the sign-in screen.
 
-**Migration status:** this workspace's development database records a Phase 2 baseline migration named `20261019200000_init`, while the checked-in history has older migration names. Prisma migration verification currently fails on that mismatch. The Phase 3 schema was synchronized to the local database with `prisma db push`, preserving its existing rows. Migration history needs reconciliation before `npm run db:migrate` can be relied on for a fresh or upgraded database.
+**Existing development database:** this workspace's `server/prisma/dev.db` records a Phase 2 baseline migration named `20261019200000_init`, while the checked-in migration directory uses `20261019000000_init`. Running `npm run db:migrate` against that existing database can fail with a shadow-database `P3006` error. The local schema was synchronized with `prisma db push`, preserving its rows. A fresh SQLite database was verified with both `npm run db:migrate --workspace server` and `npm run db:deploy --workspace server`; those commands applied all four checked-in migrations successfully.
 
 ## Run in development
 
