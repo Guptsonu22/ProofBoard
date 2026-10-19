@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { Activity, BarChart3, CircleHelp, FileSpreadsheet, FolderOpen, LayoutDashboard, LogOut, Plus, Settings2, Sparkles } from 'lucide-react';
-import { authenticate, getCurrentUser, getHealth, logout, type PublicUser } from './lib/api';
+import { Activity, BarChart3, FileSpreadsheet, FolderOpen, LayoutDashboard, LogOut, Menu, Plus, X } from 'lucide-react';
+import { authenticate, getCurrentUser, getHealth, getDatasets, getReports, logout, type Dataset, type PublicUser, type Report } from './lib/api';
 import { DatasetDetailPage, DatasetsPage } from './datasets/DatasetPages';
 import { ReportEditorPage, ReportsPage } from './reports/ReportPages';
 import { SharedReportPage } from './shares/SharedReportPage';
@@ -12,6 +12,7 @@ function App() {
   const [authState, setAuthState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [authError, setAuthError] = useState('');
   const [logoutBusy, setLogoutBusy] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (location.pathname.startsWith('/share/')) return;
@@ -55,14 +56,6 @@ function App() {
           </nav>
         </div>
         <div className="mt-auto px-4 pb-5">
-          <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50/70 p-4">
-            <div className="mb-2 flex items-center gap-2 text-indigo-700"><Sparkles size={15} /><span className="text-xs font-semibold">Your workspace</span></div>
-            <p className="text-xs leading-5 text-slate-600">Your reports and data will live here once you add a dataset.</p>
-          </div>
-          <nav className="space-y-1" aria-label="Help and settings">
-            <NavItem to="/help" icon={<CircleHelp size={17} />} label="Help & feedback" />
-            <NavItem to="/settings" icon={<Settings2 size={17} />} label="Settings" />
-          </nav>
           <div className="mt-5 flex items-center gap-3 border-t border-slate-100 px-2 pt-4">
             <div className="avatar">PB</div>
             <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Your workspace</p><p className="truncate text-xs text-slate-500">{user.email}</p></div>
@@ -71,9 +64,17 @@ function App() {
         </div>
       </aside>
 
+      {mobileNavOpen && <div className="fixed inset-0 z-30 bg-slate-950/30 md:hidden" onMouseDown={event => { if (event.target === event.currentTarget) setMobileNavOpen(false); }}>
+        <aside className="flex h-full w-[min(84vw,300px)] flex-col bg-white p-4 shadow-xl" aria-label="Mobile navigation">
+          <div className="flex items-center justify-between px-2 py-3"><span className="font-bold">proof<span className="text-indigo-600">board</span></span><button type="button" className="icon-button" aria-label="Close navigation" onClick={() => setMobileNavOpen(false)}><X size={18}/></button></div>
+          <nav className="mt-3 space-y-1" aria-label="Main navigation" onClick={() => setMobileNavOpen(false)}><NavItem to="/" icon={<LayoutDashboard size={17}/>} label="Overview"/><NavItem to="/reports" icon={<FileSpreadsheet size={17}/>} label="Reports"/><NavItem to="/datasets" icon={<FolderOpen size={17}/>} label="Datasets"/></nav>
+          <div className="mt-auto flex items-center gap-3 border-t border-slate-100 px-2 pt-4"><div className="avatar">PB</div><p className="min-w-0 flex-1 truncate text-xs text-slate-500">{user.email}</p><button type="button" className="icon-button" onClick={() => { setMobileNavOpen(false); void signOut(); }} disabled={logoutBusy} aria-label="Sign out"><LogOut size={16}/></button></div>
+        </aside>
+      </div>}
+
       <main className="min-w-0 flex-1 md:ml-[248px]">
         <header className="sticky top-0 z-10 flex h-[68px] items-center justify-between border-b border-slate-200/70 bg-white/90 px-5 backdrop-blur md:px-9">
-          <div className="flex items-center gap-2 text-sm"><span className="text-slate-400">Workspace</span><span className="text-slate-300">/</span><span className="font-medium">{location.pathname.startsWith('/datasets') ? 'Datasets' : location.pathname.startsWith('/reports') ? 'Reports' : 'Overview'}</span></div>
+          <div className="flex min-w-0 items-center gap-2 text-sm"><button type="button" className="icon-button md:hidden" aria-label={mobileNavOpen ? 'Navigation open' : 'Open navigation'} onClick={() => setMobileNavOpen(true)}><Menu size={18}/></button><span className="hidden text-slate-400 sm:inline">Workspace</span><span className="hidden text-slate-300 sm:inline">/</span><span className="truncate font-medium">{location.pathname.startsWith('/datasets') ? 'Datasets' : location.pathname.startsWith('/reports') ? 'Reports' : 'Overview'}</span></div>
           <div className="flex items-center gap-3"><HealthStatus /><Link to="/datasets" className="button-primary hidden sm:inline-flex"><Plus size={16} /> Add dataset</Link><div className="avatar md:hidden">PB</div></div>
         </header>
         <div className="mx-auto max-w-[1180px] px-5 py-8 md:px-9 md:py-10">
@@ -83,7 +84,7 @@ function App() {
             <Route path="/datasets/:datasetId" element={<DatasetDetailPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/reports/:reportId" element={<ReportEditorPage />} />
-            <Route path="*" element={<ComingSoon />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </main>
@@ -153,27 +154,23 @@ function HealthStatus() {
 }
 
 function Dashboard({ email }: { email: string }) {
+  const [datasets, setDatasets] = useState<Dataset[] | null>(null);
+  const [reports, setReports] = useState<Array<Report & {dataset:{name:string}}>>([]);
+  const [error, setError] = useState('');
+  useEffect(() => { let active = true; Promise.all([getDatasets(),getReports()]).then(([d,r])=>{if(active){setDatasets(d);setReports(r);}}).catch(()=>{if(active)setError('Could not load your workspace summary. Visit Datasets or Reports to retry.');}); return()=>{active=false;}; },[]);
   return <>
     <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
       <div><div className="mb-2 flex items-center gap-2 text-xs font-medium text-indigo-600"><Activity size={14} /> YOUR DATA, MADE CLEAR</div><h1 className="text-3xl font-bold tracking-tight md:text-[34px]">Good to see you, {email.split('@')[0]}.</h1><p className="mt-2 text-sm text-slate-500">A clear view of your reporting workspace.</p></div>
       <Link className="button-primary w-fit" to="/datasets"><Plus size={16} /> Add a dataset</Link>
     </div>
-    <section className="mt-2 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
-      <div className="border-b border-slate-100 px-6 py-5"><h2 className="font-semibold">Start with a dataset</h2><p className="mt-1 text-xs text-slate-500">Upload a CSV to see its profile and data quality.</p></div>
-      <div className="flex min-h-[230px] flex-col items-center justify-center px-6 py-10 text-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><FileSpreadsheet size={24} /></div>
-        <h3 className="text-sm font-semibold">Your first dataset starts here</h3>
-        <p className="mt-2 max-w-sm text-sm leading-6 text-slate-500">Explore column types, missing values, and row level warnings before creating reports.</p>
-        <Link className="button-secondary mt-5" to="/datasets"><Plus size={15} /> Add a dataset</Link>
-      </div>
-    </section>
-    <p className="mt-5 text-center text-xs text-slate-400">Your dataset list is private to your account.</p>
+    {error&&<p role="alert" className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{error}</p>}
+    {datasets===null&&!error?<section className="rounded-2xl border border-slate-200 bg-white p-8 text-sm text-slate-500" role="status">Loading your workspace…</section>:datasets?.length?<div className="grid gap-5 lg:grid-cols-2"><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 className="font-semibold">Recent datasets</h2><Link className="text-sm text-indigo-700" to="/datasets">View all</Link></div>{datasets.slice(0,5).map(d=><Link key={d.id} to={`/datasets/${encodeURIComponent(d.id)}`} className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 last:border-0 hover:bg-slate-50"><span className="min-w-0 truncate text-sm font-medium">{d.name}</span><span className="shrink-0 text-xs text-slate-500">{d.parsedRowCount.toLocaleString()} rows</span></Link>)}</section><section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="flex items-center justify-between border-b border-slate-100 px-5 py-4"><h2 className="font-semibold">Recent reports</h2><Link className="text-sm text-indigo-700" to="/reports">View all</Link></div>{reports.slice(0,5).map(r=><Link key={r.id} to={`/reports/${encodeURIComponent(r.id)}`} className="block border-b border-slate-100 px-5 py-3 last:border-0 hover:bg-slate-50"><p className="truncate text-sm font-medium">{r.name}</p><p className="mt-1 truncate text-xs text-slate-500">{r.dataset.name}</p></Link>)}{!reports.length&&<p className="px-5 py-6 text-sm text-slate-500">No reports yet. <Link className="text-indigo-700 underline" to="/reports">Create one</Link></p>}</section></div>:<section className="mt-2 rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center"><div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-500"><FileSpreadsheet size={24}/></div><h2 className="text-sm font-semibold">Your workspace is ready</h2><p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">Upload a CSV to inspect its column types, missing values, and row warnings. Then build a report from the data.</p><Link className="button-secondary mt-5" to="/datasets"><Plus size={15}/>Add a dataset</Link></section>}
   </>;
 }
 
 
-function ComingSoon() {
-  return <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center"><div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 text-slate-500"><FolderOpen size={21} /></div><h1 className="text-xl font-semibold">This workspace section is being prepared</h1><p className="mt-2 text-sm text-slate-500">The dashboard is ready. More workspace features will arrive in a later phase.</p></div>;
+function NotFound() {
+  return <section className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center"><h1 className="text-xl font-semibold">Page not found</h1><p className="mt-2 text-sm text-slate-500">That page does not exist in this workspace.</p><Link className="button-secondary mt-5" to="/">Return to overview</Link></section>;
 }
 
 export default App;
