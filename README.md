@@ -15,12 +15,13 @@ From the project folder:
 Copy-Item .env.example server/.env
 npm install
 npm run db:generate
+if (-not (Test-Path server/prisma/dev.db)) { New-Item -ItemType File -Path server/prisma/dev.db | Out-Null }
 npm run db:migrate
 ```
 
 The migrations create the local SQLite database. No seed data is needed; create an account from the sign-in screen.
 
-**Existing development database:** this workspace's `server/prisma/dev.db` records a Phase 2 baseline migration named `20261019200000_init`, while the checked-in migration directory uses `20261019000000_init`. Running `npm run db:migrate` against that existing database can fail with a shadow-database `P3006` error. The local schema was synchronized with `prisma db push`, preserving its rows. A fresh SQLite database was verified with both `npm run db:migrate --workspace server` and `npm run db:deploy --workspace server`; those commands applied all four checked-in migrations successfully.
+**SQLite setup:** create the empty database file before running Prisma migrations, as shown above. The migration commands were verified against an empty SQLite file and applied all four checked-in migrations. This workspace's existing `server/prisma/dev.db` records a Phase 2 baseline migration named `20261019200000_init`, while the checked-in migration directory uses `20261019000000_init`. Running `npm run db:migrate` against that existing database can fail with a shadow-database `P3006` error. The local schema was synchronized with `prisma db push`, preserving its rows; do not delete that database to work around the migration-history mismatch.
 
 ## Run in development
 
