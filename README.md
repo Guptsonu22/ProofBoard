@@ -12,7 +12,7 @@ ProofBoard is a CSV report builder. This phase provides the runnable React and E
 From the project folder:
 
 ```powershell
-Copy-Item .env.example .env
+Copy-Item .env.example server/.env
 npm install
 npm run db:generate
 npm run db:migrate
@@ -39,7 +39,7 @@ npm run build
 npm start
 ```
 
-Set `NODE_ENV=production` in `.env` before starting the production server so Express serves the built client. By default, `npm start` uses the configured development environment and only starts the API.
+`npm start` launches the production server and serves the built client from `client/dist`.
 
 ## Tests
 

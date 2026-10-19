@@ -21,6 +21,16 @@ export const errorHandler: ErrorRequestHandler = (error: unknown, _request, resp
     response.status(error.status).json({ error: { code: error.code, message: error.message, ...(error.details === undefined ? {} : { details: error.details }) } });
     return;
   }
+  if (typeof error === 'object' && error !== null && 'status' in error && typeof error.status === 'number' && error.status >= 400 && error.status < 500) {
+    const status = error.status;
+    response.status(status).json({
+      error: {
+        code: status === 413 ? 'PAYLOAD_TOO_LARGE' : 'BAD_REQUEST',
+        message: status === 413 ? 'The request body is too large.' : 'The request could not be parsed.',
+      },
+    });
+    return;
+  }
   console.error('Unhandled request error:', error);
   response.status(500).json({ error: { code: 'INTERNAL_SERVER_ERROR', message: 'An unexpected error occurred.' } });
 };

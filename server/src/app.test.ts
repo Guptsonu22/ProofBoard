@@ -1,4 +1,4 @@
-import { afterAll, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app } from './app.js';
 
@@ -15,8 +15,14 @@ describe('HTTP foundation', () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual({ error: { code: 'NOT_FOUND', message: 'The requested resource was not found.' } });
   });
-});
 
-afterAll(() => {
-  // The test imports the app without opening a listening socket.
+  it('returns a client error in the shared JSON format for malformed JSON', async () => {
+    const response = await request(app)
+      .post('/api/example')
+      .set('Content-Type', 'application/json')
+      .send('{invalid');
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe('BAD_REQUEST');
+    expect(response.body.error.message).toBe('The request could not be parsed.');
+  });
 });
