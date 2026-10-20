@@ -93,7 +93,7 @@ For metric/chart blocks, blank and invalid measure values are excluded, never co
 
 ### C. Sharing and security
 
-Creating a share uses 32 random bytes encoded as base64url. Only the SHA-256 token hash is stored; the raw token is returned to the owner to form the public URL. At creation, the server saves a snapshot of the report definition, evaluated results, and provenance, omitting internal owner/dataset/report identifiers and raw CSV access. Later edits to the private report do not change that snapshot.
+Creating a share uses 32 random bytes encoded as base64url. Only the SHA-256 token hash is stored; the raw token is returned to the owner to form the public URL. At creation, the server saves a snapshot of the report definition, evaluated results, and provenance, omitting internal owner/dataset/report identifiers and raw CSV access. Top-N table snapshots include every dataset column for each displayed row; the share dialog warns owners to review these values before creating a link. Later edits to the private report do not change that snapshot.
 
 Each public request hashes and validates its token and checks expiry and revocation against the database. Revocation takes effect on the next request. Public responses are read-only and sent with no-store cache controls and a no-referrer policy. The public route exposes only the snapshot; private dataset/report routes require a session and scope database queries to that session's user. Composite foreign keys also bind dataset rows and reports/shares to their owner. Password hashes and token hashes are not returned by API responses.
 
