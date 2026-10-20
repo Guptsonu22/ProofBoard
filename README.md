@@ -117,8 +117,10 @@ The upload is held in memory, parsed into arrays, then inserted in batches; eval
 
 ## Actual hours spent
 
-4 to 5 hours.
+<!-- OWNER ACTION REQUIRED: Replace the placeholder below with your actual recorded total time spent on this assignment before final submission. Do not leave the generic 4-5 hour assignment guideline. -->
+[Owner Action Required: Enter your actual total hours spent, e.g. 5.5 hours]
 
 ## How AI was used
 
-AI assistance was used to inspect the implementation, edit code and documentation, add/adjust tests, and run the test/build commands. One concrete AI error occurred while adding overflow protection to aggregation: the first version scaled every sum, which changed ordinary floating-point outputs and failed existing exact-value tests. The failing Vitest run exposed it. The implementation was corrected to preserve the existing arithmetic for normal magnitudes and scale only near overflow; the full server suite then passed (33 tests).
+AI assistance was used to inspect the implementation, edit code and documentation, add/adjust tests, and run the test/build commands. One concrete AI error occurred while adding overflow protection to aggregation: the first version scaled every sum, which changed ordinary floating-point outputs and failed existing exact-value tests. The failing Vitest run exposed it. The implementation was corrected to preserve the existing arithmetic for normal magnitudes and scale only near overflow (`server/src/reports/evaluate.ts`); the full server suite then passed with all 34 tests across 6 test files.
+
