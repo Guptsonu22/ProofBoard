@@ -62,6 +62,17 @@ describe('server CSV ingestion and data-quality profiling', () => {
     expect(result.columns[1]?.type).toBe('number');
   });
 
+  it('enforces the source-row and column limits with actionable errors', () => {
+    let rowLimitError: unknown;
+    try { parseCsv(Buffer.from(`id\n${Array.from({ length: 50_001 }, () => '1').join('\n')}`)); } catch (error) { rowLimitError = error; }
+    expect(rowLimitError).toMatchObject({ status: 413, code: 'ROW_LIMIT' });
+
+    const tooManyColumns = `${Array.from({ length: 101 }, (_, index) => `column_${index + 1}`).join(',')}\n${Array.from({ length: 101 }, () => 'x').join(',')}`;
+    let columnLimitError: unknown;
+    try { parseCsv(Buffer.from(tooManyColumns)); } catch (error) { columnLimitError = error; }
+    expect(columnLimitError).toMatchObject({ status: 400, code: 'COLUMN_LIMIT' });
+  });
+
   it('rejects empty, binary, invalid UTF-8, malformed EOF quoting, and oversized uploads with clear errors', async () => {
     const { agent } = await signedIn();
     const upload = (buffer: Buffer, fileName = 'upload.csv') => agent.post('/api/datasets').set('Origin', origin).attach('file', buffer, { filename: fileName, contentType: 'text/csv' });

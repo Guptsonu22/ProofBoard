@@ -8,6 +8,9 @@ describe('HTTP foundation', () => {
     expect(response.status).toBe(200);
     expect(response.body.status).toBe('ok');
     expect(Number.isNaN(Date.parse(response.body.timestamp))).toBe(false);
+    expect(response.headers['content-security-policy']).toContain("default-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("object-src 'none'");
   });
 
   it('returns consistent JSON for an unknown API route', async () => {
