@@ -1,0 +1,2 @@
+This is a plain text file that is not a CSV dataset.
+ProofBoard upload validation should reject this invalid file format.
