@@ -8,7 +8,7 @@ const server = app.listen(env.PORT, host, () => {
 
 function shutDown(signal: string) {
   console.info(`${signal} received; closing HTTP server.`);
-  server.close((error) => {
+  server.close((error?: Error) => {
     if (error) {
       console.error('Could not close HTTP server cleanly:', error);
       process.exitCode = 1;
