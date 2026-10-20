@@ -69,9 +69,9 @@ npm test
 npm run build
 ```
 
-The verified run for this README completed with **33 server tests passing across 6 test files** and a successful production build of both server and frontend. Vite reported that the main client bundle exceeds its 500 kB advisory threshold. There is no separate frontend test script or browser end-to-end suite configured. The server test script resets `server/prisma/test.db`; it does not reset the development database.
+The final verified run completed with **34 server tests passing across 6 test files** and a successful production build of both server and frontend. Vite reported that the main client bundle exceeds its 500 kB advisory threshold. There is no separate frontend test script or browser end-to-end suite configured. The server test script resets `server/prisma/test.db`; it does not reset the development database.
 
-For an empty local database, migrations were verified using the setup commands above. The current workspace `server/prisma/dev.db`, if present from an earlier schema-sync workflow, has migration history that does not match the checked-in migration chain; `prisma migrate dev` can fail with Prisma `P3006` on that existing file. Preserve that database and investigate its schema history before attempting a migration. A clean database file works with the checked-in migrations.
+For an empty local database, migrations were verified using the setup commands above. A read-only `prisma migrate status` check on the existing workspace `server/prisma/dev.db` found that its database-only migration is `20261019200000_init`, which is absent from the checked-in migration directory; Prisma reported no common migration between the two histories. `prisma migrate dev` can fail with `P3006` on this file. Do not reset or delete it. Before reconciling, stop the app, make a verified SQLite backup, compare the live schema and data with the checked-in migrations, and plan a data-preserving baseline or migration-history reconciliation on a copy first. A new empty database successfully applies all checked-in migrations.
 
 ## How my report builder works
 
@@ -99,7 +99,7 @@ Each public request hashes and validates its token and checks expiry and revocat
 
 ### D. Remaining risks and scale
 
-The upload is held in memory, parsed into arrays, then inserted in batches; evaluation loads rows into memory and processes them in JavaScript. A CSV 100 times larger exceeds the current upload/row limits long before it can be evaluated. If limits were raised without redesign, memory use and SQLite write/read latency would become the first failures. The next scale step would be streaming parsing into bounded batches, moving to a server database, and evaluating typed values incrementally or through safe allowlisted query plans. The in-memory login/share rate limits are per process and reset at restart; production multi-instance deployments need a shared limiter store. The app has no configured Content Security Policy, and the client bundle currently exceeds Vite's advisory chunk size.
+The upload is held in memory, parsed into arrays, then inserted in batches; evaluation loads rows into memory and processes them in JavaScript. A CSV 100 times larger exceeds the current upload/row limits long before it can be evaluated. If limits were raised without redesign, memory use and SQLite write/read latency would become the first failures. The next scale step would be streaming parsing into bounded batches, moving to a server database, and evaluating typed values incrementally or through safe allowlisted query plans. The in-memory login/share rate limits are per process and reset at restart; production multi-instance deployments need a shared limiter store. Production responses set a Content Security Policy with self-hosted scripts and no objects or frames; inline styles remain allowed for UI progress styling. The Vite development server does not attach that policy to its HTML. The client bundle currently exceeds Vite's advisory chunk size.
 
 ## Decisions and trade-offs
 
@@ -115,6 +115,9 @@ The upload is held in memory, parsed into arrays, then inserted in batches; eval
 - A separately configured frontend unit-test suite and automated browser end-to-end tests.
 - Streaming ingestion and database-backed distributed rate limiting.
 
+## Actual hours spent
+
+4 to 5 hours.
 
 ## How AI was used
 
